@@ -44,6 +44,9 @@ ignore = ["B008", "UP047"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = [
+    "ignore:invalid escape sequence.*:SyntaxWarning",
+]
 
 [tool.mypy]
 python_version = "3.13"
