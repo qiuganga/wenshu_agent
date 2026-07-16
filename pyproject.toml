@@ -22,6 +22,7 @@ dependencies = [
     "omegaconf>=2.3.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.0.0",
     "pyyaml>=6.0.3",
     "qdrant-client>=1.18.0",
     "ruff>=0.15.21",
@@ -49,3 +50,17 @@ ignore_missing_imports = true
 check_untyped_defs = true
 warn_unused_ignores = false
 exclude = [".venv", "docker/embedding", "app/test"]
+
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/test/*",
+    "app/scripts/*",
+    "app/service/meta_knowledge_service.py",
+    "app/config/meta_config.py",
+]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true

@@ -1,0 +1,201 @@
+cases:
+  - id: single_table_1
+    question: "list recent orders"
+    expected_tables: ['fact_order']
+    expected_columns: ['order_id', 'order_amount']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['select']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: region_sales_2
+    question: "count sales amount by region last year"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['region_id', 'order_amount', 'region_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['join', 'group by']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: product_quantity_3
+    question: "product quantity ranking"
+    expected_tables: ['fact_order', 'dim_product']
+    expected_columns: ['product_id', 'quantity', 'product_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['join', 'group by']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: top_n_4
+    question: "top n regions by sales"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['order_amount', 'region_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['limit']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: union_case_5
+    question: "union region ids"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['region_id']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['union']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: single_table_6
+    question: "list recent orders"
+    expected_tables: ['fact_order']
+    expected_columns: ['order_id', 'order_amount']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['select']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: region_sales_7
+    question: "count sales amount by region last year"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['region_id', 'order_amount', 'region_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['join', 'group by']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: product_quantity_8
+    question: "product quantity ranking"
+    expected_tables: ['fact_order', 'dim_product']
+    expected_columns: ['product_id', 'quantity', 'product_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['join', 'group by']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: top_n_9
+    question: "top n regions by sales"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['order_amount', 'region_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['limit']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: union_case_10
+    question: "union region ids"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['region_id']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['union']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: single_table_11
+    question: "list recent orders"
+    expected_tables: ['fact_order']
+    expected_columns: ['order_id', 'order_amount']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['select']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: region_sales_12
+    question: "count sales amount by region last year"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['region_id', 'order_amount', 'region_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['join', 'group by']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: product_quantity_13
+    question: "product quantity ranking"
+    expected_tables: ['fact_order', 'dim_product']
+    expected_columns: ['product_id', 'quantity', 'product_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['join', 'group by']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: top_n_14
+    question: "top n regions by sales"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['order_amount', 'region_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['limit']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: union_case_15
+    question: "union region ids"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['region_id']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['union']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: single_table_16
+    question: "list recent orders"
+    expected_tables: ['fact_order']
+    expected_columns: ['order_id', 'order_amount']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['select']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: region_sales_17
+    question: "count sales amount by region last year"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['region_id', 'order_amount', 'region_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['join', 'group by']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: product_quantity_18
+    question: "product quantity ranking"
+    expected_tables: ['fact_order', 'dim_product']
+    expected_columns: ['product_id', 'quantity', 'product_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['join', 'group by']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: top_n_19
+    question: "top n regions by sales"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['order_amount', 'region_name']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['limit']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
+  - id: union_case_20
+    question: "union region ids"
+    expected_tables: ['fact_order', 'dim_region']
+    expected_columns: ['region_id']
+    expected_metrics: []
+    forbidden_tables: [secret_table]
+    expected_sql_contains: ['union']
+    expected_sql_not_contains: [secret_table, delete, update]
+    expected_result: null
+    tags: [demo, fake]
