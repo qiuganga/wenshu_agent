@@ -8,7 +8,6 @@ FORBIDDEN_SNIPPETS = [
     "C:\\",
     "data-agent",
     "conf\x07pp_config",
-    "conf/app_config.example.yaml conf/app_config.yaml",
 ]
 REQUIRED_PATHS = [
     "conf/app_config.example.yaml",
@@ -36,6 +35,8 @@ def main() -> int:
             issues.append(f"README references required path that does not exist yet: {path}")
     if "Copy-Item conf\\app_config.example.yaml conf\\app_config.yaml" not in text:
         issues.append("README must use escaped PowerShell Copy-Item command for app_config")
+    if "cp conf/app_config.example.yaml conf/app_config.yaml" not in text:
+        issues.append("README must include Linux/macOS cp command for app_config")
     if issues:
         print("README command check failed:")
         print("\n".join(issues))
