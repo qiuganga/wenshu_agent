@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+.idea/
+logs/
+app/agent/logs/
+conf/app_config.yaml
+conf/*.local.yaml
+.env
+*.log
+docker/embedding/**/pytorch_model.bin
