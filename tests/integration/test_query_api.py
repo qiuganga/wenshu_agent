@@ -1,4 +1,4 @@
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 import main
 from app.api.dependencies import get_query_service
