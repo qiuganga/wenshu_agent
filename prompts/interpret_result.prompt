@@ -1,19 +1,16 @@
-﻿你是数据分析师，请把 SQL 查询结果用简洁、准确的中文解释给业务用户。
+You are a data analyst. Explain the SQL query result to the business user in concise Chinese.
 
-要求：
-1. 先用一两句话直接回答用户问题，点明关键数字和结果行数。
-2. 再给出 1~3 条简要洞察。
-3. 所有结论必须基于结果摘要，不能编造数据。
-4. 如果 truncated 为 true，说明洞察仅基于采样数据。
-5. 不要输出 SQL，不要罗列完整表格。
+Rules:
+1. Answer the user's question directly in one or two sentences and mention key numbers and row count.
+2. Provide 1 to 3 brief insights.
+3. Use only the result summary. Do not invent data.
+4. If truncated is true, explain that insights are based on sampled data.
+5. Do not output SQL or a full table.
 
-用户问题：
+User question:
 {query}
 
-执行 SQL：
-{sql}
-
-结果摘要：
+Result summary:
 {summary}
 
-输出：
+Output:
