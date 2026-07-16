@@ -22,7 +22,7 @@ log_format = (
 def inject_request_id(record):
     try:
         request_id = request_id_ctx_var.get()
-    except Exception as e:
+    except Exception:
         request_id = uuid.uuid4()
     record["extra"]["request_id"] = request_id
 

@@ -5,6 +5,7 @@ from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
 from app.agent.llm import llm
+from app.agent.nodes.generate_sql import _strip_code_fence
 from app.agent.state import DataAgentState
 from app.core.logging import logger
 from app.prompt.prompt_loader import load_prompt
@@ -12,35 +13,33 @@ from app.prompt.prompt_loader import load_prompt
 
 async def correct_sql(state: DataAgentState, runtime: Runtime[DataAgentContext]):
     writer = runtime.stream_writer
-    writer({"stage":"校正SQL"})
+    writer({"event": "stage", "node": "correct_sql", "message": "Correcting SQL"})
 
-    sql = state["sql"]
-    error = state["error"]
-
-    query = state["query"]
-    table_infos = state["table_infos"]
-    metric_infos = state["metric_infos"]
-    date_info = state["date_info"]
-    db_info = state["db_info"]
-
-    try:
-        prompt = PromptTemplate(template=load_prompt("correct_sql"), input_variables=["query", "metric_infos"])
-        output_parser = StrOutputParser()
-
-        chain = prompt | llm | output_parser
-
-        result = await chain.ainvoke(
-            {"query": query,
-             "table_infos": yaml.dump(table_infos, allow_unicode=True, sort_keys=False),
-             "metric_infos": yaml.dump(metric_infos, allow_unicode=True, sort_keys=False),
-             "date_info": yaml.dump(date_info, allow_unicode=True, sort_keys=False),
-             "db_info": yaml.dump(db_info, allow_unicode=True, sort_keys=False),
-             "sql": sql,
-             "error": error
-             })
-
-        logger.info(f"校正后的SQL: {result}")
-        return {"sql": result}
-    except Exception as e:
-        logger.error(f"校正SQL澶辫触:{str(e)}")
-        raise
+    retry_count = state.get("retry_count", 0) + 1
+    prompt = PromptTemplate(
+        template=load_prompt("correct_sql"),
+        input_variables=["query", "table_infos", "metric_infos", "date_info", "db_info", "sql", "error"],
+    )
+    chain = prompt | llm | StrOutputParser()
+    corrected_sql = await chain.ainvoke(
+        {
+            "query": state["query"],
+            "table_infos": yaml.dump(state.get("table_infos", []), allow_unicode=True, sort_keys=False),
+            "metric_infos": yaml.dump(state.get("metric_infos", []), allow_unicode=True, sort_keys=False),
+            "date_info": yaml.dump(state.get("date_info", {}), allow_unicode=True, sort_keys=False),
+            "db_info": yaml.dump(state.get("db_info", {}), allow_unicode=True, sort_keys=False),
+            "sql": state.get("normalized_sql") or state.get("sql", ""),
+            "error": state.get("error") or "SQL validation failed",
+        }
+    )
+    corrected_sql = _strip_code_fence(corrected_sql)
+    logger.info(f"sql corrected retry_count={retry_count} sql_length={len(corrected_sql)}")
+    writer({"event": "sql_corrected", "node": "correct_sql", "message": "SQL corrected", "retry_count": retry_count})
+    return {
+        "sql": corrected_sql,
+        "normalized_sql": "",
+        "sql_referenced_tables": [],
+        "retry_count": retry_count,
+        "error": None,
+        "error_code": None,
+    }

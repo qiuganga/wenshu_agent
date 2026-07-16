@@ -1,6 +1,4 @@
-import asyncio
-
-from langchain_core.output_parsers import JsonOutputParser
+﻿from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
 from langgraph.runtime import Runtime
 
@@ -14,36 +12,22 @@ from app.prompt.prompt_loader import load_prompt
 
 async def recall_value(state: DataAgentState, runtime: Runtime[DataAgentContext]):
     writer = runtime.stream_writer
-    writer({"stage": "召回字段取值"})
+    writer({"event": "stage", "node": "recall_value", "message": "Recalling column values"})
 
     query = state["query"]
-    keywords = state["keywords"]
-
+    keywords = state.get("keywords", [])
     value_es_repository = runtime.context["value_es_repository"]
 
-    try:
-        # 使用LLM扩展关键词
-        prompt = PromptTemplate(template=load_prompt("extend_keywords_for_value_recall"), input_variables=["query"])
-        output_parser = JsonOutputParser()
+    prompt = PromptTemplate(template=load_prompt("extend_keywords_for_value_recall"), input_variables=["query"])
+    chain = prompt | llm | JsonOutputParser()
+    expanded_keywords = await chain.ainvoke({"query": query})
 
-        chain = prompt | llm | output_parser
+    values_map: dict[str, ValueInfoES] = {}
+    for keyword in list(dict.fromkeys(keywords + expanded_keywords)):
+        values: list[ValueInfoES] = await value_es_repository.search(keyword)
+        for value in values:
+            values_map.setdefault(value["id"], value)
 
-        result = await chain.ainvoke({"query": query})
-
-        # 使用扩展后的关键词召回字段取值
-        values_map: dict[str, ValueInfoES] = {}
-        keywords = list(set(keywords + result))
-        for keyword in keywords:
-            values: list[ValueInfoES] = await value_es_repository.search(keyword)
-            for value in values:
-                value_id = value["id"]
-                if value_id not in values_map:
-                    values_map[value_id] = value
-
-        retrieved_values = list(values_map.values())
-        logger.info(f"召回字段取值：{list(values_map.keys())}")
-
-        return {'retrieved_values': retrieved_values}
-    except Exception as e:
-        logger.error(f"召回字段取值失败: {str(e)}")
-        raise
+    retrieved_values = list(values_map.values())
+    logger.info(f"value recall count={len(retrieved_values)}")
+    return {"retrieved_values": retrieved_values}

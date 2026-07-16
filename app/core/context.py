@@ -1,3 +1,3 @@
-import contextvars
+﻿from contextvars import ContextVar
 
-request_id_ctx_var = contextvars.ContextVar('request_id')
+request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default="-")

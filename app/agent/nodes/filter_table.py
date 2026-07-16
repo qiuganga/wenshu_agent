@@ -6,43 +6,34 @@ from langgraph.runtime import Runtime
 from app.agent.context import DataAgentContext
 from app.agent.llm import llm
 from app.agent.state import DataAgentState
+from app.config.app_config import app_config
 from app.core.logging import logger
 from app.prompt.prompt_loader import load_prompt
 
 
 async def filter_table(state: DataAgentState, runtime: Runtime[DataAgentContext]):
     writer = runtime.stream_writer
-    writer({"stage":"过滤表格"})
+    writer({"event": "stage", "node": "filter_table", "message": "Filtering table candidates"})
 
     query = state["query"]
-    table_infos = state["table_infos"]
+    table_infos = state.get("table_infos", [])
+    prompt = PromptTemplate(template=load_prompt("filter_table_info"), input_variables=["query", "table_infos"])
+    chain = prompt | llm | JsonOutputParser()
+    selected = await chain.ainvoke(
+        {"query": query, "table_infos": yaml.dump(table_infos, allow_unicode=True, sort_keys=False)}
+    )
 
-    try:
-        # 使用LLM过滤表信息
-        prompt = PromptTemplate(template=load_prompt("filter_table_info"), input_variables=["query", "table_infos"])
-        output_parser = JsonOutputParser()
+    filtered = []
+    for table_info in table_infos:
+        table_name = table_info["name"]
+        if table_name not in selected:
+            continue
+        selected_columns = set(selected[table_name])
+        table_info = dict(table_info)
+        table_info["columns"] = [col for col in table_info.get("columns", []) if col["name"] in selected_columns]
+        if table_info["columns"]:
+            filtered.append(table_info)
 
-        chain = prompt | llm | output_parser
-
-        result = await chain.ainvoke(
-            {"query": query, "table_infos": yaml.dump(table_infos, allow_unicode=True, sort_keys=False)})
-
-        # 利用模型输出过滤table_infos
-        # {
-        #   'fact_order':['order_amount', 'region_id'],
-        #   'dim_region':['region_id', 'region_name']
-        # }
-        for table_info in table_infos[:]:
-            if table_info["name"] not in result:
-                table_infos.remove(table_info)
-            else:
-                selected_columns = result[table_info["name"]]
-                for column_info in table_info["columns"][:]:
-                    if column_info["name"] not in selected_columns:
-                        table_info["columns"].remove(column_info)
-
-        logger.info(f"过滤后的表信息 {[table_info['name'] for table_info in table_infos]}")
-        return {"table_infos": table_infos}
-    except Exception as e:
-        logger.error(f"过滤表失败{str(e)}")
-        raise
+    filtered = filtered[: app_config.agent.max_candidate_tables]
+    logger.info(f"table filter count={len(filtered)}")
+    return {"table_infos": filtered}

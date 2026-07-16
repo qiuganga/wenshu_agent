@@ -1,4 +1,8 @@
-﻿logging:
+﻿app:
+  environment: development
+  debug: true
+
+logging:
   file:
     enable: true
     level: INFO
@@ -13,14 +17,14 @@ db_meta:
   host: localhost
   port: 3307
   user: ghy
-  password: Ghy20021218
+  password: change_me
   database: meta
 
 db_dw:
   host: localhost
   port: 3307
-  user: ghy
-  password: Ghy20021218
+  user: ghy_readonly
+  password: change_me
   database: dw
 
 qdrant:
@@ -33,13 +37,23 @@ embedding:
   port: 8081
   model: BAAI/bge-large-zh-v1.5
 
-
 es:
   host: localhost
   port: 9200
-  index_name: data_agent
-
+  index_name: data-agent-value
 
 llm:
   model_name: deepseek-ai/DeepSeek-V3
   api_key: your_siliconflow_api_key_here
+  base_url: https://api.siliconflow.cn/v1
+  temperature: 0
+  timeout_seconds: 30
+  max_retries: 2
+
+agent:
+  max_sql_retries: 2
+  max_result_rows: 200
+  query_timeout_seconds: 10
+  max_candidate_tables: 10
+  max_candidate_metrics: 10
+  log_full_sql: false
