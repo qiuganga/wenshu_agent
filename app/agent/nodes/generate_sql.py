@@ -24,6 +24,9 @@ async def generate_sql(state: DataAgentState, runtime: Runtime[DataAgentContext]
             "date_info",
             "db_info",
             "format_instructions",
+            "previous_output",
+            "parse_error",
+            "correction_instruction",
         ],
     )
     sql = await invoke_sql_chain(
@@ -37,6 +40,9 @@ async def generate_sql(state: DataAgentState, runtime: Runtime[DataAgentContext]
             "date_info": yaml.dump(state.get("date_info", {}), allow_unicode=True, sort_keys=False),
             "db_info": yaml.dump(state.get("db_info", {}), allow_unicode=True, sort_keys=False),
             "format_instructions": sql_format_instructions(),
+            "previous_output": "",
+            "parse_error": "",
+            "correction_instruction": "",
         },
     )
     logger.info(f"sql generated length={len(sql)}")

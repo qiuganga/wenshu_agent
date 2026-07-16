@@ -30,4 +30,9 @@ Current date information:
 Database environment:
 {db_info}
 
+Retry feedback, if any:
+previous_output: {previous_output}
+parse_error: {parse_error}
+correction_instruction: {correction_instruction}
+
 Output:

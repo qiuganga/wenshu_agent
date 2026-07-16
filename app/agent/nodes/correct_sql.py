@@ -26,6 +26,9 @@ async def correct_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
             "sql",
             "error",
             "format_instructions",
+            "previous_output",
+            "parse_error",
+            "correction_instruction",
         ],
     )
     corrected_sql = await invoke_sql_chain(
@@ -40,6 +43,9 @@ async def correct_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
             "sql": state.get("normalized_sql") or state.get("sql", ""),
             "error": state.get("error") or "SQL validation failed",
             "format_instructions": sql_format_instructions(),
+            "previous_output": "",
+            "parse_error": "",
+            "correction_instruction": "",
         },
     )
     logger.info(f"sql corrected retry_count={retry_count} sql_length={len(corrected_sql)}")
