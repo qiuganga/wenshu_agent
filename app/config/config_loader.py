@@ -23,7 +23,10 @@ def load_config(arg1: type[T] | str | Path, arg2: type[T] | str | Path) -> T:
         config_file = Path(cast(str | Path, arg2))
 
     schema = OmegaConf.structured(schema_cls)
-    content = OmegaConf.load(config_file)
-    conf = OmegaConf.merge(schema, content)
+    if config_file.exists():
+        content = OmegaConf.load(config_file)
+        conf = OmegaConf.merge(schema, content)
+    else:
+        conf = schema
     OmegaConf.resolve(conf)
     return cast(T, OmegaConf.to_object(conf))
