@@ -24,6 +24,7 @@ async def security_validate_sql(state: DataAgentState, runtime: Runtime[DataAgen
             allowed_columns=allowed_columns,
             dialect=dialect,
             allow_select_star=app_config.agent.allow_select_star,
+            banned_functions=set(app_config.agent.banned_sql_functions),
         )
         logger.info(
             f"sql security validated tables={validation.referenced_tables} "

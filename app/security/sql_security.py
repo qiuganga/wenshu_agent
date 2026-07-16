@@ -35,6 +35,53 @@ BANNED_FUNCTIONS = frozenset(
 )
 
 
+def _strip_literals_comments_and_quoted_identifiers(sql: str) -> str:
+    result: list[str] = []
+    index = 0
+    length = len(sql)
+    while index < length:
+        char = sql[index]
+        nxt = sql[index + 1] if index + 1 < length else ""
+        if char in {"'", '"', "`"}:
+            quote = char
+            result.append(" ")
+            index += 1
+            while index < length:
+                if sql[index] == "\\":
+                    index += 2
+                    continue
+                if sql[index] == quote:
+                    if index + 1 < length and sql[index + 1] == quote and quote in {"'", '"'}:
+                        index += 2
+                        continue
+                    index += 1
+                    break
+                index += 1
+            continue
+        if char == "-" and nxt == "-":
+            result.append(" ")
+            index += 2
+            while index < length and sql[index] not in "\r\n":
+                index += 1
+            continue
+        if char == "#":
+            result.append(" ")
+            index += 1
+            while index < length and sql[index] not in "\r\n":
+                index += 1
+            continue
+        if char == "/" and nxt == "*":
+            result.append(" ")
+            index += 2
+            while index + 1 < length and not (sql[index] == "*" and sql[index + 1] == "/"):
+                index += 1
+            index += 2
+            continue
+        result.append(char)
+        index += 1
+    return "".join(result)
+
+
 class SQLValidationResult(BaseModel):
     normalized_sql: str
     referenced_tables: list[str]
@@ -134,16 +181,22 @@ def _assert_allowed_tables(referenced_tables: Iterable[str], allowed_tables: set
             raise SQLSecurityError(f"Table is not allowed: {table}")
 
 
-def _assert_no_banned_capabilities(raw_sql: str, expression: exp.Expression) -> None:
-    if any(pattern.search(raw_sql) for pattern in BANNED_SQL_CAPABILITY_PATTERNS):
+def _assert_no_banned_capabilities(
+    raw_sql: str,
+    expression: exp.Expression,
+    banned_functions: set[str] | None = None,
+) -> None:
+    sanitized_sql = _strip_literals_comments_and_quoted_identifiers(raw_sql)
+    if any(pattern.search(sanitized_sql) for pattern in BANNED_SQL_CAPABILITY_PATTERNS):
         raise SQLSecurityError("SQL contains a banned capability")
 
+    active_banned_functions = BANNED_FUNCTIONS | {name.lower() for name in (banned_functions or set())}
     for func in expression.find_all(exp.Func):
         if isinstance(func, exp.Anonymous):
             name = str(func.this).lower()
         else:
             name = (func.sql_name() or func.key).lower()
-        if name in BANNED_FUNCTIONS:
+        if name in active_banned_functions:
             raise SQLSecurityError(f"SQL function is not allowed: {name}")
 
 
@@ -222,6 +275,7 @@ def validate_readonly_sql(
     allowed_columns: dict[str, set[str]] | None = None,
     dialect: str = "mysql",
     allow_select_star: bool = False,
+    banned_functions: set[str] | None = None,
 ) -> SQLValidationResult:
     raw_sql = sql.strip()
     if not raw_sql:
@@ -232,7 +286,7 @@ def validate_readonly_sql(
     if not _is_readonly_select(expression):
         raise SQLSecurityError("Only SELECT or WITH ... SELECT statements are allowed")
 
-    _assert_no_banned_capabilities(raw_sql, expression)
+    _assert_no_banned_capabilities(raw_sql, expression, banned_functions)
     _assert_star_policy(expression, allow_select_star)
 
     referenced_tables = _referenced_tables(expression)

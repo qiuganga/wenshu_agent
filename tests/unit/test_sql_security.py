@@ -162,3 +162,29 @@ def test_illegal_limit_rejected(sql):
 def test_max_rows_must_be_positive():
     with pytest.raises(SQLSecurityError):
         enforce_select_limit("select order_id from fact_order", 0)
+
+
+def test_dangerous_words_in_literals_comments_and_aliases_are_not_rejected():
+    validate_readonly_sql(
+        "select 'prepare' as operation_name, order_id as execute_status from fact_order -- drop table x\nlimit 10",
+        ALLOWED,
+        ALLOWED_COLUMNS,
+    )
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "prepare stmt from 'select 1'",
+        "execute stmt",
+        "deallocate prepare stmt",
+        "handler fact_order open",
+        "load data infile 'x' into table fact_order",
+        "select order_id from fact_order into outfile '/tmp/x'",
+        "select order_id from fact_order into dumpfile '/tmp/x'",
+        "select order_id from fact_order InTo   OutFile '/tmp/x'",
+    ],
+)
+def test_reject_mysql_dangerous_capabilities(sql):
+    with pytest.raises(SQLSecurityError):
+        validate_readonly_sql(sql, ALLOWED, ALLOWED_COLUMNS)

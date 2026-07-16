@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.app_config import app_config
 from app.core.logging import logger
+from app.security.sql_identifiers import quote_mysql_identifier, quote_mysql_qualified_identifier, safe_limit
 
 
 class QueryExecutionResult(BaseModel):
@@ -24,12 +25,17 @@ class DWMySQLRepository:
         self.session = session
 
     async def get_column_types(self, table_name: str) -> dict[str, str]:
-        result = await self.session.execute(text(f"show columns from {table_name}"))
+        safe_table = quote_mysql_qualified_identifier(table_name)
+        result = await self.session.execute(text(f"show columns from {safe_table}"))
         return {row.Field: row.Type for row in result.fetchall()}
 
     async def get_column_values(self, table_name: str, column_name: str, limit: int):
-        safe_limit = min(limit, 100000)
-        result = await self.session.execute(text(f"select distinct {column_name} from {table_name} limit {safe_limit}"))
+        safe_table = quote_mysql_qualified_identifier(table_name)
+        safe_column = quote_mysql_identifier(column_name)
+        bounded_limit = safe_limit(limit)
+        result = await self.session.execute(
+            text(f"select distinct {safe_column} from {safe_table} limit {bounded_limit}")
+        )
         return result.scalars().fetchall()
 
     async def get_db_info(self):
@@ -40,6 +46,11 @@ class DWMySQLRepository:
 
     async def validate_sql(self, sql: str):
         await self.session.execute(text(f"explain {sql}"))
+
+    async def explain_json(self, sql: str) -> str:
+        result = await self.session.execute(text(f"explain format=json {sql}"))
+        value = result.scalar()
+        return str(value or "{}")
 
     async def _best_effort_readonly_session(self, timeout_seconds: int) -> None:
         timeout_ms = max(1, int(timeout_seconds * 1000))
