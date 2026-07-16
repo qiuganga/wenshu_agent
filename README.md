@@ -1,41 +1,8 @@
 # wenshu-agent
 
-`wenshu-agent` 是一个基于 FastAPI、LangGraph、LangChain、MySQL、Qdrant、Elasticsearch 和 HuggingFace Embedding 的自然语言转 SQL 数据分析 Agent。项目重点不是只演示 prompt 生成 SQL，而是展示一个面试级后端 Agent 项目应具备的工程能力：SQL 安全网关、结构化 Agent 流程、自动修正与重验、SSE 流式事件、异常脱敏、健康检查、测试和静态检查。
+`wenshu-agent` is a FastAPI + LangGraph text-to-SQL data analysis agent. It receives a business question, recalls metadata, builds a query plan, generates and validates SQL, executes a readonly query, and streams a concise answer back to the caller.
 
-## 业务背景
-
-用户输入自然语言问题，例如“统计去年各地区的销售总额”。系统会召回数据表字段、指标和字段取值，生成结构化查询计划，再生成 SQL、进行 SQL AST 安全校验、数据库语法验证、只读执行，最后把结果解释成自然语言。
-
-## 核心功能
-
-- 自然语言问题理解和关键词抽取
-- 元数据 / 指标 / 字段取值混合召回
-- LangGraph 编排 Agent 节点
-- 结构化 QueryPlan
-- SQL 生成、修正、重新验证
-- SQL AST 只读安全网关
-- 自动补 LIMIT 和最大行数限制
-- 查询超时保护
-- SSE 标准事件输出
-- request_id 链路追踪
-- 统一异常脱敏
-- 健康检查接口
-- pytest / ruff / mypy 核心检查
-
-## 技术栈
-
-- FastAPI
-- LangGraph
-- LangChain
-- MySQL / SQLAlchemy / asyncmy
-- Qdrant
-- Elasticsearch
-- HuggingFace text-embeddings-inference
-- sqlglot
-- pytest / ruff / mypy
-- uv
-
-## 架构图
+## Core Flow
 
 ```mermaid
 flowchart TD
@@ -43,9 +10,9 @@ flowchart TD
     API --> SSE[SSE Event Stream]
     API --> G[LangGraph Agent]
     G --> K[extract_keywords]
-    K --> C[recall_column Qdrant]
-    K --> M[recall_metric Qdrant]
-    K --> V[recall_value Elasticsearch]
+    K --> C[recall_column / Qdrant]
+    K --> M[recall_metric / Qdrant]
+    K --> V[recall_value / Elasticsearch]
     C --> Merge[merge_retrieved_info]
     M --> Merge
     V --> Merge
@@ -55,11 +22,11 @@ flowchart TD
     FM --> CTX
     CTX --> PLAN[plan_query]
     PLAN --> GEN[generate_sql]
-    GEN --> SEC[security_validate_sql sqlglot]
-    SEC --> DBV[database_validate_sql EXPLAIN]
-    DBV --> EXE[execute_sql readonly + timeout]
-    DBV --> COR[correct_sql]
-    SEC --> COR
+    GEN --> SEC[security_validate_sql / sqlglot]
+    SEC --> DBV[database_validate_sql / EXPLAIN]
+    DBV --> EXE[execute_sql / readonly + timeout]
+    SEC --> COR[correct_sql]
+    DBV --> COR
     COR --> SEC
     SEC --> FAIL[failed]
     DBV --> FAIL
@@ -68,166 +35,106 @@ flowchart TD
     INT --> SSE
 ```
 
-## LangGraph 执行流程
-
-```text
-START
-→ extract_keywords
-→ recall_column / recall_value / recall_metric 并行
-→ merge_retrieved_info
-→ filter_table / filter_metric
-→ add_extra_context
-→ plan_query
-→ generate_sql
-→ security_validate_sql
-→ database_validate_sql
-→ execute_sql
-→ summarize_result
-→ interpret_result
-→ END
-```
-
-校验失败时：
-
-```text
-security_validate_sql 或 database_validate_sql 失败
-→ retry_count < max_retries 时进入 correct_sql
-→ correct_sql 后重新进入 security_validate_sql
-→ 再进入 database_validate_sql
-→ 超过 max_retries 进入 failed
-```
-
-## SQL 安全设计
-
-安全边界在代码层，不依赖 prompt。
-
-`app/security/sql_security.py` 使用 `sqlglot` 解析 SQL AST，执行以下规则：
-
-- 只允许单条 SQL
-- 只允许 `SELECT` 或 `WITH ... SELECT`
-- 拒绝 INSERT / UPDATE / DELETE / DROP / ALTER / CREATE / TRUNCATE / REPLACE / GRANT / REVOKE / CALL / LOAD DATA
-- 拒绝 `INTO OUTFILE`
-- 拒绝多语句
-- 拒绝访问未授权表
-- 拒绝访问系统库和系统表
-- 提取 SQL 实际引用表
-- 自动补充 LIMIT
-
-生产环境还必须使用只读数据库账号。Prompt 不是安全边界，只读账号、AST 校验和最小权限需要同时存在。
-
-## RAG 召回设计
-
-项目不是传统文档 chunk RAG，而是数据分析元数据 RAG：
-
-- `conf/meta_config.yaml` 定义表、字段、指标、别名和同步字段
-- 构建脚本把字段和指标写入 Qdrant
-- 字段取值写入 Elasticsearch
-- 查询时并行召回字段、指标、字段取值
-- 合并召回结果后进入 QueryPlan 和 SQL 生成 prompt
-
-## SSE 事件设计
-
-接口返回 `text/event-stream`，事件格式：
-
-```text
-event: stage
-data: {"request_id":"...","event":"stage","sequence":2,"message":"Generating SQL"}
-```
-
-支持事件类型：
-
-- started
-- stage
-- sql_generated
-- sql_validated
-- sql_corrected
-- result
-- error
-- done
-
-每个事件包含：
-
-- request_id
-- event
-- node
-- status
-- message
-- sequence
-- elapsed_ms
-- data
-
-正常结束发送 `done`。异常时发送 `error` 和 `done`，不会把数据库原始异常或连接信息暴露给前端。
-
-## 目录结构
+## Directory Layout
 
 ```text
 app/
-  agent/              LangGraph、state、nodes
-  api/                routers、schemas、dependencies
-  clients/            MySQL、Qdrant、ES、Embedding client managers
-  config/             OmegaConf 配置模型和加载
-  core/               request_id、logging、exceptions、events、lifespan
-  models/             MySQL / Qdrant / ES 数据模型
-  repository/         数据访问层
-  security/           SQL AST 安全网关
-  service/            QueryService SSE 编排
+  agent/              LangGraph graph, state, nodes, and LLM initialization
+  api/                FastAPI routers, request schemas, and dependencies
+  clients/            MySQL, Qdrant, Elasticsearch, and Embedding client managers
+  config/             Runtime configuration dataclasses and loader
+  core/               request_id, logging, exceptions, events, lifespan
+  models/             MySQL / Qdrant / ES data models
+  repository/         Data access layer
+  security/           SQL security gateway and data masking
+  service/            QueryService and SSE orchestration
 conf/
   app_config.example.yaml
   meta_config.yaml
 prompts/
-  LLM prompt 模板
+  LLM prompt templates
 tests/
   unit/
   integration/
-docker/
-  mysql / qdrant / elasticsearch / embedding 依赖服务
 ```
 
-## 本地启动
+## SQL Security
+
+Security is enforced in code, not by prompt instructions. `app/security/sql_security.py` parses SQL with `sqlglot` and applies these rules:
+
+- Only one statement is allowed.
+- Only `SELECT` or `WITH ... SELECT` is allowed.
+- INSERT, UPDATE, DELETE, DDL, CALL, LOAD DATA, HANDLER, PREPARE, EXECUTE, and file export capabilities are rejected.
+- Dangerous functions are rejected: `sleep`, `benchmark`, `get_lock`, `release_lock`, `is_free_lock`, `is_used_lock`, `load_file`, `master_pos_wait`, `uuid_short`.
+- Table and column allowlists are built from recalled `table_infos`.
+- `SELECT *` and `table.*` are rejected by default.
+- Unqualified columns are accepted for a single matching table and rejected when ambiguous across multiple tables.
+- The outer LIMIT is enforced: missing LIMIT is added, oversized LIMIT is capped, and non-literal or negative LIMIT is rejected.
+- Production deployments must use a readonly DW database account, never root.
+
+## Query Execution And Result Exposure
+
+`app/repository/mysql/dw_mysql_repository.py` sets MySQL execution timeout and readonly transaction mode on a best-effort basis, then fetches at most `max_rows + 1` records to detect truncation without unbounded `fetchall`.
+
+SSE responses do not expose full SQL or raw database rows by default:
+
+- `execute_sql` emits only `row_count`, `truncated`, `execution_time_ms`, and `referenced_tables`.
+- `summarize_result` creates `row_count`, `columns`, `numeric_stats`, `sample`, and `truncated`.
+- Result samples are masked by `app/security/data_masking.py`.
+- The final event contains `final_answer` and `result_summary` by default.
+- `expose_sql_to_client` and `expose_raw_rows_to_client` must be enabled explicitly for debugging. Raw rows are still sampled, masked, and limited by `max_sse_payload_bytes`.
+
+## Streaming And Cancellation
+
+The query API returns `text/event-stream`. `QueryService` consumes LangGraph with `astream(..., stream_mode="custom")`, wraps node custom events as SSE, and watches for client disconnects.
+
+When a client disconnects, the graph task is cancelled and the async generator is closed. Disconnect cancellation does not emit `error` or `done` after the client is gone. Internal `CancelledError` keeps cancellation semantics and is not wrapped as a normal sanitized error.
+
+## Local Setup
 
 ```powershell
 cd D:\sgg-zhanggui-agent\code\data-agent
 uv sync
-Copy-Item conf\app_config.example.yaml conf\app_config.yaml
+Copy-Item confpp_config.example.yaml confpp_config.yaml
 ```
 
-编辑 `conf/app_config.yaml`，填写自己的 API Key，并使用只读 DW 数据库账号：
+Edit `conf/app_config.yaml` with your LLM API key and a readonly DW database user:
 
 ```yaml
 llm:
-  api_key: your_siliconflow_api_key_here
+  api_key: your_api_key_here
 
 db_dw:
   user: ghy_readonly
 ```
 
-启动依赖服务：
+Start dependencies:
 
 ```powershell
 cd docker
 docker compose up -d
 ```
 
-构建元数据知识库：
+Build metadata knowledge:
 
 ```powershell
 cd ..
 uv run python -m app.scripts.build_meta_knowledge -c conf\meta_config.yaml
 ```
 
-启动后端：
+Start backend:
 
 ```powershell
 uv run fastapi dev main.py
 ```
 
-备用端口：
+Alternative port:
 
 ```powershell
 uv run uvicorn main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-## API 示例
+## API Example
 
 ```http
 POST /api/v1/query
@@ -235,37 +142,35 @@ Content-Type: application/json
 X-Request-ID: demo-001
 
 {
-  "query": "统计去年各地区的销售总额",
+  "query": "count sales amount by region last year",
   "max_rows": 100
 }
 ```
 
-旧接口 `/api/query` 保留为兼容接口，但推荐使用 `/api/v1/query`。
+The legacy endpoint `/api/query` is kept for compatibility. Prefer `/api/v1/query`.
 
-## 健康检查
+## Health Checks
 
 ```http
 GET /health/live
 GET /health/ready
 ```
 
-`ready` 会检查 MySQL、Qdrant、Elasticsearch 和 Embedding 服务，使用短超时，避免长时间阻塞。
+`/health/ready` checks MySQL, Qdrant, Elasticsearch, and Embedding with short timeouts.
 
-## 测试和静态检查
+## Checks
 
 ```powershell
-uv run python -m compileall -q app tests
 uv run pytest -q
 uv run ruff check .
-uv run mypy app/security app/core/events.py app/core/exceptions.py app/agent/state.py
+uv run ruff format --check .
+uv run mypy app/security app/agent app/service app/api
 ```
 
-当前全量历史 ORM / TypedDict 代码仍有类型债，因此 mypy 先覆盖本次新增的核心安全、事件、异常和状态模块。
+Current tests cover SQL security, LIMIT enforcement, table and column allowlists, banned functions, data masking, result summaries, LangGraph routing, SSE events, API validation, request IDs, exception sanitization, and disconnect cancellation.
 
-## 后续规划
+## Current Limits
 
-- 把 LLM 调用进一步改为 provider 抽象，支持 fake model 注入
-- 引入更严格的 SQL cost estimation
-- 扩展 conversation_id 多轮上下文
-- 对 ready 检查做分级熔断和缓存
-- 将全量 ORM 和 repository 类型债纳入 mypy
+- Column allowlists depend on recalled `table_infos`; missing metadata can reject otherwise valid SQL.
+- MySQL timeout and readonly transaction setup are best effort and depend on database version and permissions. A readonly DB account is still required as the final permission boundary.
+- `/health/ready` depends on external services and returns `degraded` when local dependencies are not running.

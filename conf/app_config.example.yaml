@@ -1,4 +1,4 @@
-﻿app:
+app:
   environment: development
   debug: true
 
@@ -53,7 +53,40 @@ llm:
 agent:
   max_sql_retries: 2
   max_result_rows: 200
+  result_sample_rows: 20
   query_timeout_seconds: 10
+  llm_output_parse_retries: 2
+  allow_select_star: false
+  expose_sql_to_client: false
+  expose_raw_rows_to_client: false
+  max_sse_payload_bytes: 262144
+  disconnect_poll_interval_seconds: 0.2
   max_candidate_tables: 10
   max_candidate_metrics: 10
   log_full_sql: false
+  banned_sql_functions:
+    - benchmark
+    - get_lock
+    - is_free_lock
+    - is_used_lock
+    - load_file
+    - master_pos_wait
+    - release_lock
+    - sleep
+    - uuid_short
+
+security:
+  sensitive_fields:
+    - account_no
+    - api_key
+    - bank_card
+    - email
+    - id_card
+    - identity_card
+    - mobile
+    - passwd
+    - password
+    - phone
+    - secret
+    - telephone
+    - token
