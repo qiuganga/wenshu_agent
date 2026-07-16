@@ -1,8 +1,4 @@
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
-
-from omegaconf import OmegaConf
 
 
 @dataclass
@@ -32,5 +28,5 @@ class MetricConfig:
 
 @dataclass
 class MetaConfig:
-    tables: Optional[list[TableConfig]] = None
-    metrics: Optional[list[MetricConfig]] = None
+    tables: list[TableConfig] | None = None
+    metrics: list[MetricConfig] | None = None

@@ -1,5 +1,3 @@
-from typing import Optional
-
 import httpx
 
 from app.config.app_config import EmbeddingConfig, app_config
@@ -41,7 +39,7 @@ class LocalEndpointEmbeddings:
 
 class EmbeddingClientManager:
     def __init__(self, config: EmbeddingConfig):
-        self.client: Optional[LocalEndpointEmbeddings] = None
+        self.client: LocalEndpointEmbeddings | None = None
         self.config = config
 
     def _get_url(self):

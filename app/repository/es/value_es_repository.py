@@ -1,10 +1,10 @@
 from elasticsearch import AsyncElasticsearch, NotFoundError
 
+from app.config.app_config import app_config
 from app.models.es.value_info_es import ValueInfoES
 
 
 class ValueESRepository:
-    index_name = 'data-agent-value'
     index_mappings = {
         "dynamic": False,
         "properties": {
@@ -15,11 +15,12 @@ class ValueESRepository:
             "column_name": {"type": "keyword"},
             "table_id": {"type": "keyword"},
             "table_name": {"type": "keyword"},
-        }
+        },
     }
 
     def __init__(self, client: AsyncElasticsearch):
         self.client = client
+        self.index_name = app_config.es.index_name
 
     async def ensure_index(self):
         if not await self.client.indices.exists(index=self.index_name):
@@ -27,23 +28,21 @@ class ValueESRepository:
 
     async def index(self, value_infos, batch_size=20):
         for i in range(0, len(value_infos), batch_size):
-            batch = value_infos[i:i + batch_size]
+            batch = value_infos[i : i + batch_size]
             operations = []
             for value_info in batch:
-                operations.append({"index": {"_index": self.index_name, "_id": value_info['id']}})
+                operations.append({"index": {"_index": self.index_name, "_id": value_info["id"]}})
                 operations.append(value_info)
             await self.client.bulk(operations=operations)
 
     async def search(self, keyword: str, score_threshold: float = 0.6, limit: int = 5) -> list[ValueInfoES]:
         try:
-            result = await self.client.search(index=self.index_name,
-                                              query={
-                                                  "match": {
-                                                      "value": keyword
-                                                  }
-                                              },
-                                              min_score=score_threshold,
-                                              size=limit)
+            result = await self.client.search(
+                index=self.index_name,
+                query={"match": {"value": keyword}},
+                min_score=score_threshold,
+                size=limit,
+            )
         except NotFoundError:
             return []
-        return [hit['_source'] for hit in result['hits']['hits']]
+        return [hit["_source"] for hit in result["hits"]["hits"]]

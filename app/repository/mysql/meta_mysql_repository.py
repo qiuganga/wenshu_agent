@@ -1,6 +1,4 @@
-from typing import Sequence
-
-from sqlalchemy import text, select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.mysql.column_info_mysql import ColumnInfoMySQL
@@ -32,7 +30,7 @@ class MetaMySQLRepository:
         return await self.session.get(TableInfoMySQL, table_id)
 
     async def get_key_columns_by_table_id(self, table_id: str) -> list[ColumnInfoMySQL]:
-        sql = f"""
+        sql = """
             select * 
             from column_info 
             where table_id = :table_id 
@@ -40,4 +38,4 @@ class MetaMySQLRepository:
         """
         query = select(ColumnInfoMySQL).from_statement(text(sql))
         result = await self.session.execute(query, {"table_id": table_id})
-        return result.scalars().fetchall()
+        return list(result.scalars().fetchall())

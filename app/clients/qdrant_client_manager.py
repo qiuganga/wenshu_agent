@@ -7,11 +7,11 @@ from app.config.app_config import QdrantConfig, app_config
 
 class QdrantClientManager:
     def __init__(self, config: QdrantConfig):
-        self.config: QdrantConfig = config
+        self.config = config
         self.client: AsyncQdrantClient | None = None
 
     def _get_url(self):
-        return f"http://127.0.0.1:{self.config.port}"
+        return f"http://{self.config.host}:{self.config.port}"
 
     def init(self):
         self.client = AsyncQdrantClient(url=self._get_url(), check_compatibility=False, trust_env=False)
@@ -24,13 +24,14 @@ class QdrantClientManager:
 qdrant_client_manager = QdrantClientManager(app_config.qdrant)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+
     async def test():
         qdrant_client_manager.init()
-
         try:
+            assert qdrant_client_manager.client is not None
             collections = await qdrant_client_manager.client.get_collections()
-            print("Qdrant 连接成功")
+            print("Qdrant connected")
             print(collections)
         finally:
             await qdrant_client_manager.close()

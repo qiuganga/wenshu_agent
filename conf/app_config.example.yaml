@@ -1,4 +1,8 @@
-﻿logging:
+app:
+  environment: development
+  debug: true
+
+logging:
   file:
     enable: true
     level: INFO
@@ -13,14 +17,14 @@ db_meta:
   host: localhost
   port: 3307
   user: ghy
-  password: Ghy20021218
+  password: change_me
   database: meta
 
 db_dw:
   host: localhost
   port: 3307
-  user: ghy
-  password: Ghy20021218
+  user: ghy_readonly
+  password: change_me
   database: dw
 
 qdrant:
@@ -33,13 +37,65 @@ embedding:
   port: 8081
   model: BAAI/bge-large-zh-v1.5
 
-
 es:
   host: localhost
   port: 9200
-  index_name: data_agent
-
+  index_name: data-agent-value
 
 llm:
   model_name: deepseek-ai/DeepSeek-V3
   api_key: your_siliconflow_api_key_here
+  base_url: https://api.siliconflow.cn/v1
+  temperature: 0
+  timeout_seconds: 30
+  max_retries: 2
+
+agent:
+  max_sql_retries: 2
+  max_result_rows: 200
+  result_sample_rows: 20
+  query_timeout_seconds: 10
+  llm_output_parse_retries: 2
+  allow_select_star: false
+  expose_sql_to_client: false
+  expose_raw_rows_to_client: false
+  max_sse_payload_bytes: 262144
+  disconnect_poll_interval_seconds: 0.2
+  sse_queue_maxsize: 100
+  token_batch_chars: 80
+  max_candidate_tables: 10
+  max_candidate_metrics: 10
+  max_estimated_rows: 100000
+  max_join_tables: 8
+  reject_full_table_scan: false
+  reject_filesort: false
+  reject_temporary_table: false
+  reject_on_cost_error: false
+  expose_trace_to_client: false
+  log_full_sql: false
+  banned_sql_functions:
+    - benchmark
+    - get_lock
+    - is_free_lock
+    - is_used_lock
+    - load_file
+    - master_pos_wait
+    - release_lock
+    - sleep
+    - uuid_short
+
+security:
+  sensitive_fields:
+    - account_no
+    - api_key
+    - bank_card
+    - email
+    - id_card
+    - identity_card
+    - mobile
+    - passwd
+    - password
+    - phone
+    - secret
+    - telephone
+    - token
