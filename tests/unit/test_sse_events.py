@@ -1,4 +1,4 @@
-﻿from app.core.events import AgentEvent, format_sse
+from app.core.events import AgentEvent, format_sse
 
 
 def test_sse_format_contains_event_and_data():
