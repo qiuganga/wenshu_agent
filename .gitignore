@@ -17,3 +17,9 @@ conf/*.local.yaml
 .env
 *.log
 docker/embedding/**/pytorch_model.bin
+tmp_demo_bootstrap.json
+evaluation_report.json
+evals/evaluation_report.json
+.coverage
+htmlcov/
+pytest-report.xml
