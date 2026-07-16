@@ -1,4 +1,4 @@
-﻿# wenshu-agent
+# wenshu-agent
 
 `wenshu-agent` 是一个基于 FastAPI、LangGraph、LangChain、MySQL、Qdrant、Elasticsearch 和 HuggingFace Embedding 的自然语言转 SQL 数据分析 Agent。项目重点不是只演示 prompt 生成 SQL，而是展示一个面试级后端 Agent 项目应具备的工程能力：SQL 安全网关、结构化 Agent 流程、自动修正与重验、SSE 流式事件、异常脱敏、健康检查、测试和静态检查。
 
@@ -261,17 +261,6 @@ uv run mypy app/security app/core/events.py app/core/exceptions.py app/agent/sta
 ```
 
 当前全量历史 ORM / TypedDict 代码仍有类型债，因此 mypy 先覆盖本次新增的核心安全、事件、异常和状态模块。
-
-## 面试亮点
-
-1. Prompt 不作为安全边界，SQL 安全由 sqlglot AST 网关实现。
-2. SQL 修正后必须重新经过安全校验和数据库校验。
-3. retry_count / max_retries 防止无限修正循环。
-4. 自动 LIMIT、最大返回行数和查询超时保护数据库资源。
-5. 使用只读数据库账号作为生产环境底线。
-6. LangGraph 节点职责清晰，召回、规划、生成、校验、执行、解释分层。
-7. SSE 标准事件可展示 Agent 执行阶段，便于前端和调试。
-8. request_id、日志脱敏、统一异常让系统具备可观测和安全的工程能力。
 
 ## 后续规划
 
