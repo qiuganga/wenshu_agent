@@ -23,7 +23,7 @@ def inject_request_id(record):
     try:
         request_id = request_id_ctx_var.get()
     except Exception:
-        request_id = uuid.uuid4()
+        request_id = str(uuid.uuid4())
     record["extra"]["request_id"] = request_id
 
 
@@ -41,8 +41,8 @@ if app_config.logging.file.enable:
         rotation=app_config.logging.file.rotation,
         retention=app_config.logging.file.retention,
         encoding="utf-8",
-        errors="replace"
+        errors="replace",
     )
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logger.info("hello world")

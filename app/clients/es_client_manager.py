@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 
 from elasticsearch import AsyncElasticsearch
 
@@ -25,9 +25,11 @@ es_client_manager = ESClientManager(app_config.es)
 
 
 if __name__ == "__main__":
+
     async def test():
         es_client_manager.init()
         try:
+            assert es_client_manager.client is not None
             print(await es_client_manager.client.ping())
         finally:
             await es_client_manager.close()

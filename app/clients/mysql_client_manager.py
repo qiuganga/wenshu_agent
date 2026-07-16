@@ -1,7 +1,7 @@
-﻿import asyncio
+import asyncio
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config.app_config import DBConfig, app_config
 
@@ -10,7 +10,7 @@ class MysqlClientManager:
     def __init__(self, db_config: DBConfig):
         self.db_config = db_config
         self.engine: AsyncEngine | None = None
-        self.session_factory = None
+        self.session_factory: async_sessionmaker[AsyncSession] | None = None
 
     def _get_url(self):
         return (
@@ -21,7 +21,7 @@ class MysqlClientManager:
     def init(self):
         self.engine = create_async_engine(url=self._get_url(), pool_size=10, pool_pre_ping=True)
         self.session_factory = async_sessionmaker(
-            self.engine,
+            bind=self.engine,
             autoflush=True,
             expire_on_commit=False,
             autobegin=True,
@@ -40,6 +40,7 @@ if __name__ == "__main__":
     meta_mysql_client_manager.init()
 
     async def test():
+        assert meta_mysql_client_manager.session_factory is not None
         async with meta_mysql_client_manager.session_factory() as session:
             result = await session.execute(text("select 1"))
             print(result.scalar())

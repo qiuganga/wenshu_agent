@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from typing import TypeVar, cast, overload
 
 from omegaconf import OmegaConf
@@ -27,4 +27,3 @@ def load_config(arg1: type[T] | str | Path, arg2: type[T] | str | Path) -> T:
     conf = OmegaConf.merge(schema, content)
     OmegaConf.resolve(conf)
     return cast(T, OmegaConf.to_object(conf))
-

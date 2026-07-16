@@ -1,1 +1,1 @@
-﻿# Security helpers for SQL validation.
+# Security helpers for SQL validation.

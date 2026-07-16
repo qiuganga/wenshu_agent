@@ -1,4 +1,3 @@
-
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,4 +38,4 @@ class MetaMySQLRepository:
         """
         query = select(ColumnInfoMySQL).from_statement(text(sql))
         result = await self.session.execute(query, {"table_id": table_id})
-        return result.scalars().fetchall()
+        return list(result.scalars().fetchall())

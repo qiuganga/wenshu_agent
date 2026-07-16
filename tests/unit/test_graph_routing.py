@@ -1,4 +1,4 @@
-﻿from app.agent.graph import route_after_database_validation, route_after_security_validation
+from app.agent.graph import route_after_database_validation, route_after_security_validation
 
 
 def test_security_validation_routes_to_database_when_ok():

@@ -1,1 +1,1 @@
-﻿# Structured schemas used by agent nodes.
+# Structured schemas used by agent nodes.

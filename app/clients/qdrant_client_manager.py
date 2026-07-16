@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 
 from qdrant_client import AsyncQdrantClient
 
@@ -25,9 +25,11 @@ qdrant_client_manager = QdrantClientManager(app_config.qdrant)
 
 
 if __name__ == "__main__":
+
     async def test():
         qdrant_client_manager.init()
         try:
+            assert qdrant_client_manager.client is not None
             collections = await qdrant_client_manager.client.get_collections()
             print("Qdrant connected")
             print(collections)

@@ -1,4 +1,4 @@
-﻿from elasticsearch import AsyncElasticsearch, NotFoundError
+from elasticsearch import AsyncElasticsearch, NotFoundError
 
 from app.config.app_config import app_config
 from app.models.es.value_info_es import ValueInfoES

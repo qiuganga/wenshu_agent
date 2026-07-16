@@ -1,4 +1,6 @@
-﻿from fastapi import APIRouter, Request
+from typing import Annotated
+
+from fastapi import APIRouter, Request
 from fastapi.params import Depends
 from starlette.responses import StreamingResponse
 
@@ -21,7 +23,7 @@ def _streaming_response(generator):
 async def query_v1(
     query: QueryRequest,
     request: Request,
-    query_service: QueryService = Depends(get_query_service),
+    query_service: Annotated[QueryService, Depends(get_query_service)],
 ):
     return _streaming_response(query_service.query(query, request))
 
@@ -30,6 +32,6 @@ async def query_v1(
 async def query_legacy(
     query: QueryRequest,
     request: Request,
-    query_service: QueryService = Depends(get_query_service),
+    query_service: Annotated[QueryService, Depends(get_query_service)],
 ):
     return _streaming_response(query_service.query(query, request))

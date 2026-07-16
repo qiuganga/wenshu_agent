@@ -1,4 +1,3 @@
-
 import httpx
 
 from app.config.app_config import EmbeddingConfig, app_config

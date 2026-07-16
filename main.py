@@ -1,4 +1,4 @@
-﻿import re
+import re
 import uuid
 
 from fastapi import FastAPI, Request
@@ -22,9 +22,7 @@ app.include_router(health_router)
 async def add_request_id(request: Request, call_next):
     incoming_request_id = request.headers.get("X-Request-ID")
     request_id = (
-        incoming_request_id
-        if incoming_request_id and REQUEST_ID_RE.match(incoming_request_id)
-        else str(uuid.uuid4())
+        incoming_request_id if incoming_request_id and REQUEST_ID_RE.match(incoming_request_id) else str(uuid.uuid4())
     )
     token = request_id_ctx_var.set(request_id)
     try:

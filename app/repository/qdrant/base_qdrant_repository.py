@@ -1,4 +1,6 @@
-﻿from qdrant_client import AsyncQdrantClient
+from typing import Any, cast
+
+from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from app.config.app_config import app_config
@@ -27,7 +29,10 @@ class BaseQdrantRepository[T]:
         zipped = list(zip(ids, embeddings, payloads, strict=True))
         for i in range(0, len(zipped), batch_size):
             batch = zipped[i : i + batch_size]
-            batch_points = [PointStruct(id=id_, vector=embedding, payload=payload) for id_, embedding, payload in batch]
+            batch_points = [
+                PointStruct(id=id_, vector=embedding, payload=cast(dict[str, Any], payload))
+                for id_, embedding, payload in batch
+            ]
             await self.client.upsert(collection_name=self.collection_name, points=batch_points)
 
     async def search(self, embedding: list[float], score_threshold: float = 0.6, limit: int = 5) -> list[T]:
@@ -39,5 +44,4 @@ class BaseQdrantRepository[T]:
             score_threshold=score_threshold,
             limit=limit,
         )
-        return [point.payload for point in result.points]
-
+        return [cast(T, point.payload) for point in result.points]

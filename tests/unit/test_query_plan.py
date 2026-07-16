@@ -1,4 +1,4 @@
-﻿from app.agent.state import create_initial_state
+from app.agent.state import create_initial_state
 
 
 def test_initial_state_has_defaults():

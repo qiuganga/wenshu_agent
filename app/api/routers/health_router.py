@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 
 import httpx
 from fastapi import APIRouter
@@ -24,11 +24,15 @@ async def _check_mysql(manager) -> bool:
 
 
 async def _check_qdrant() -> bool:
+    if qdrant_client_manager.client is None:
+        return False
     await qdrant_client_manager.client.get_collections()
     return True
 
 
 async def _check_es() -> bool:
+    if es_client_manager.client is None:
+        return False
     return bool(await es_client_manager.client.ping())
 
 
