@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 
 from langgraph.runtime import Runtime
 
@@ -15,28 +15,42 @@ async def execute_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
 
     sql = state.get("normalized_sql") or state.get("sql", "")
     dw_mysql_repository = runtime.context["dw_mysql_repository"]
+    max_rows = min(state.get("max_result_rows", app_config.agent.max_result_rows), app_config.agent.max_result_rows)
     try:
-        result = await asyncio.wait_for(
-            dw_mysql_repository.execute_sql(sql),
+        execution = await asyncio.wait_for(
+            dw_mysql_repository.execute_sql(
+                sql,
+                max_rows=max_rows,
+                timeout_seconds=app_config.agent.query_timeout_seconds,
+            ),
             timeout=app_config.agent.query_timeout_seconds,
         )
         logger.info(
-            f"sql executed rows={len(result)} tables={state.get('sql_referenced_tables', [])} "
-            f"sql_length={len(sql)}"
+            f"sql executed rows={execution.row_count} truncated={execution.truncated} "
+            f"tables={state.get('sql_referenced_tables', [])} sql_length={len(sql)}"
         )
         writer(
             {
                 "event": "result",
                 "node": "execute_sql",
                 "message": "SQL executed",
-                "row_count": len(result),
-                "rows": result,
+                "row_count": execution.row_count,
+                "truncated": execution.truncated,
+                "execution_time_ms": execution.execution_time_ms,
+                "referenced_tables": state.get("sql_referenced_tables", []),
             }
         )
-        return {"result": result}
+        return {
+            "result": execution.rows,
+            "result_row_count": execution.row_count,
+            "result_truncated": execution.truncated,
+            "execution_time_ms": execution.execution_time_ms,
+        }
     except TimeoutError as exc:
         logger.exception("sql execution timed out")
         raise SQLExecutionError("SQL execution timed out") from exc
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
-        logger.exception(f"sql execution failed: {exc}")
+        logger.exception(f"sql execution failed: {type(exc).__name__}")
         raise SQLExecutionError() from exc
