@@ -1,8 +1,11 @@
-﻿from typing import Annotated
+import re
+from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.config.app_config import app_config
+
+CONVERSATION_ID_RE = re.compile(r"^[a-zA-Z0-9_.:-]{1,128}$")
 
 
 class QueryRequest(BaseModel):
@@ -16,6 +19,18 @@ class QueryRequest(BaseModel):
         stripped = value.strip()
         if not stripped:
             raise ValueError("query must not be empty")
+        return stripped
+
+    @field_validator("conversation_id")
+    @classmethod
+    def validate_conversation_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            return None
+        if not CONVERSATION_ID_RE.match(stripped):
+            raise ValueError("conversation_id contains invalid characters or is too long")
         return stripped
 
     @model_validator(mode="after")

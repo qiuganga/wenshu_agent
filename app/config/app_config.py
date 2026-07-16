@@ -1,9 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.config.config_loader import load_config
+from app.security.data_masking import DEFAULT_SENSITIVE_FIELDS
+from app.security.sql_security import BANNED_FUNCTIONS
 
 
 @dataclass
@@ -77,10 +79,23 @@ class LLMConfig:
 class AgentConfig:
     max_sql_retries: int = 2
     max_result_rows: int = 200
+    result_sample_rows: int = 20
     query_timeout_seconds: int = 10
+    llm_output_parse_retries: int = 2
+    allow_select_star: bool = False
+    expose_sql_to_client: bool = False
+    expose_raw_rows_to_client: bool = False
+    max_sse_payload_bytes: int = 262144
+    disconnect_poll_interval_seconds: float = 0.2
     max_candidate_tables: int = 10
     max_candidate_metrics: int = 10
     log_full_sql: bool = False
+    banned_sql_functions: list[str] = field(default_factory=lambda: sorted(BANNED_FUNCTIONS))
+
+
+@dataclass
+class SecurityConfig:
+    sensitive_fields: list[str] = field(default_factory=lambda: sorted(DEFAULT_SENSITIVE_FIELDS))
 
 
 @dataclass
@@ -94,6 +109,7 @@ class AppConfig:
     es: ESConfig = field(default_factory=ESConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
+    security: SecurityConfig = field(default_factory=SecurityConfig)
 
 
 config_file = Path(__file__).parents[2] / "conf" / "app_config.yaml"
@@ -101,8 +117,22 @@ app_config: AppConfig = load_config(AppConfig, config_file)
 
 
 def validate_runtime_config(config: AppConfig = app_config) -> None:
-    placeholder_values = {"", "your_siliconflow_api_key_here", "changeme"}
+    placeholder_values = {"", "your_siliconflow_api_key_here", "changeme", "change_me"}
     if config.llm.api_key.strip() in placeholder_values:
         raise ValueError("llm.api_key is not configured")
     if config.db_dw.user.lower() == "root":
         raise ValueError("Agent DW database user must not be root")
+    if config.agent.max_result_rows <= 0:
+        raise ValueError("agent.max_result_rows must be greater than 0")
+    if config.agent.result_sample_rows <= 0:
+        raise ValueError("agent.result_sample_rows must be greater than 0")
+    if config.agent.result_sample_rows > config.agent.max_result_rows:
+        raise ValueError("agent.result_sample_rows must be <= agent.max_result_rows")
+    if config.agent.query_timeout_seconds <= 0:
+        raise ValueError("agent.query_timeout_seconds must be greater than 0")
+    if config.agent.llm_output_parse_retries < 0:
+        raise ValueError("agent.llm_output_parse_retries must be >= 0")
+    if config.agent.max_sse_payload_bytes < 4096:
+        raise ValueError("agent.max_sse_payload_bytes is too small")
+    if config.agent.disconnect_poll_interval_seconds <= 0:
+        raise ValueError("agent.disconnect_poll_interval_seconds must be greater than 0")

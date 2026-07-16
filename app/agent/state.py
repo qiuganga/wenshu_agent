@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import time
 from typing import Any, TypedDict
@@ -60,12 +60,16 @@ class DataAgentState(TypedDict, total=False):
     sql: str
     normalized_sql: str
     sql_referenced_tables: list[str]
+    sql_referenced_columns: dict[str, list[str]]
     error: str | None
     error_code: str | None
     retry_count: int
     max_retries: int
     max_result_rows: int
     result: list[dict[str, Any]]
+    result_row_count: int
+    result_truncated: bool
+    execution_time_ms: int
     result_summary: dict[str, Any]
     interpretation: str
     final_answer: str
@@ -92,16 +96,19 @@ def create_initial_state(query: str, max_retries: int | None = None) -> DataAgen
         sql="",
         normalized_sql="",
         sql_referenced_tables=[],
+        sql_referenced_columns={},
         error=None,
         error_code=None,
         retry_count=0,
         max_retries=max_retries if max_retries is not None else app_config.agent.max_sql_retries,
         max_result_rows=app_config.agent.max_result_rows,
         result=[],
+        result_row_count=0,
+        result_truncated=False,
+        execution_time_ms=0,
         result_summary={},
         interpretation="",
         final_answer="",
         trace=[],
         started_at=time.time(),
     )
-
