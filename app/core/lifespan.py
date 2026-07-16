@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,7 +12,8 @@ from app.config.app_config import validate_runtime_config
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    validate_runtime_config()
+    if os.getenv("APP_SKIP_RUNTIME_CONFIG_VALIDATION") != "1":
+        validate_runtime_config()
     embedding_client_manager.init()
     qdrant_client_manager.init()
     es_client_manager.init()
