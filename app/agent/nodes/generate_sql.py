@@ -1,22 +1,13 @@
-﻿import yaml
-from langchain_core.output_parsers import StrOutputParser
+import yaml
 from langchain_core.prompts import PromptTemplate
 from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
 from app.agent.llm import llm
+from app.agent.nodes._sql_output import invoke_sql_chain, sql_format_instructions
 from app.agent.state import DataAgentState
 from app.core.logging import logger
 from app.prompt.prompt_loader import load_prompt
-
-
-def _strip_code_fence(text: str) -> str:
-    value = text.strip()
-    if value.startswith("```"):
-        value = value.strip("`")
-        if value.lower().startswith("sql"):
-            value = value[3:]
-    return value.strip()
 
 
 async def generate_sql(state: DataAgentState, runtime: Runtime[DataAgentContext]):
@@ -25,10 +16,19 @@ async def generate_sql(state: DataAgentState, runtime: Runtime[DataAgentContext]
 
     prompt = PromptTemplate(
         template=load_prompt("generate_sql"),
-        input_variables=["query", "query_plan", "table_infos", "metric_infos", "date_info", "db_info"],
+        input_variables=[
+            "query",
+            "query_plan",
+            "table_infos",
+            "metric_infos",
+            "date_info",
+            "db_info",
+            "format_instructions",
+        ],
     )
-    chain = prompt | llm | StrOutputParser()
-    sql = await chain.ainvoke(
+    sql = await invoke_sql_chain(
+        prompt,
+        llm,
         {
             "query": state["query"],
             "query_plan": yaml.dump(state.get("query_plan", {}), allow_unicode=True, sort_keys=False),
@@ -36,9 +36,9 @@ async def generate_sql(state: DataAgentState, runtime: Runtime[DataAgentContext]
             "metric_infos": yaml.dump(state.get("metric_infos", []), allow_unicode=True, sort_keys=False),
             "date_info": yaml.dump(state.get("date_info", {}), allow_unicode=True, sort_keys=False),
             "db_info": yaml.dump(state.get("db_info", {}), allow_unicode=True, sort_keys=False),
-        }
+            "format_instructions": sql_format_instructions(),
+        },
     )
-    sql = _strip_code_fence(sql)
     logger.info(f"sql generated length={len(sql)}")
     writer(
         {

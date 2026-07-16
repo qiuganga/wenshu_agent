@@ -1,31 +1,35 @@
-﻿你是 SQL 修正专家。请根据用户问题、候选表字段、指标、数据库环境、原 SQL 和校验错误，修正 SQL。
+You are a SQL correction expert. Fix the SQL according to the user question, available tables and columns, metrics, database environment, previous SQL, and validation error.
 
-要求：
-1. 只能输出一条 MySQL SELECT 或 WITH ... SELECT。
-2. 禁止任何写入、修改、删除、DDL、权限、存储过程和导出语句。
-3. 只能使用提供的表和字段。
-4. 不要输出解释。
-5. 不要使用 Markdown 代码块。
+Rules:
+1. Output only one MySQL SELECT or WITH ... SELECT query.
+2. Do not output any write operation, DDL, privilege command, stored procedure, export statement, or multiple statements.
+3. Use only the provided tables and columns.
+4. Do not output explanations.
+5. Do not use Markdown code fences.
 
-用户问题：
+Output format:
+Return a strict JSON object with one field named sql.
+{format_instructions}
+
+User question:
 {query}
 
-候选表字段：
+Candidate table fields:
 {table_infos}
 
-候选指标：
+Candidate metrics:
 {metric_infos}
 
-时间信息：
+Date information:
 {date_info}
 
-数据库环境：
+Database environment:
 {db_info}
 
-待修正 SQL：
+SQL to fix:
 {sql}
 
-校验错误：
+Validation error:
 {error}
 
-修正后的 SQL：
+Corrected JSON:
