@@ -61,8 +61,17 @@ agent:
   expose_raw_rows_to_client: false
   max_sse_payload_bytes: 262144
   disconnect_poll_interval_seconds: 0.2
+  sse_queue_maxsize: 100
+  token_batch_chars: 80
   max_candidate_tables: 10
   max_candidate_metrics: 10
+  max_estimated_rows: 100000
+  max_join_tables: 8
+  reject_full_table_scan: false
+  reject_filesort: false
+  reject_temporary_table: false
+  reject_on_cost_error: false
+  expose_trace_to_client: false
   log_full_sql: false
   banned_sql_functions:
     - benchmark

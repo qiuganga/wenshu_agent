@@ -87,8 +87,17 @@ class AgentConfig:
     expose_raw_rows_to_client: bool = False
     max_sse_payload_bytes: int = 262144
     disconnect_poll_interval_seconds: float = 0.2
+    sse_queue_maxsize: int = 100
+    token_batch_chars: int = 80
     max_candidate_tables: int = 10
     max_candidate_metrics: int = 10
+    max_estimated_rows: int = 100000
+    max_join_tables: int = 8
+    reject_full_table_scan: bool = False
+    reject_filesort: bool = False
+    reject_temporary_table: bool = False
+    reject_on_cost_error: bool = False
+    expose_trace_to_client: bool = False
     log_full_sql: bool = False
     banned_sql_functions: list[str] = field(default_factory=lambda: sorted(BANNED_FUNCTIONS))
 
@@ -134,5 +143,13 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("agent.llm_output_parse_retries must be >= 0")
     if config.agent.max_sse_payload_bytes < 4096:
         raise ValueError("agent.max_sse_payload_bytes is too small")
+    if config.agent.max_estimated_rows <= 0:
+        raise ValueError("agent.max_estimated_rows must be greater than 0")
+    if config.agent.max_join_tables <= 0:
+        raise ValueError("agent.max_join_tables must be greater than 0")
     if config.agent.disconnect_poll_interval_seconds <= 0:
         raise ValueError("agent.disconnect_poll_interval_seconds must be greater than 0")
+    if config.agent.sse_queue_maxsize <= 0:
+        raise ValueError("agent.sse_queue_maxsize must be greater than 0")
+    if config.agent.token_batch_chars <= 0:
+        raise ValueError("agent.token_batch_chars must be greater than 0")

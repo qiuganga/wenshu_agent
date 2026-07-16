@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import operator
 import time
-from typing import Any, TypedDict
+from typing import Annotated, Any, TypedDict
 
 from app.config.app_config import app_config
 from app.models.es.value_info_es import ValueInfoES
@@ -70,11 +71,16 @@ class DataAgentState(TypedDict, total=False):
     result_row_count: int
     result_truncated: bool
     execution_time_ms: int
+    sql_cost: dict[str, Any]
     result_summary: dict[str, Any]
     interpretation: str
     final_answer: str
     trace: list[dict[str, Any]]
     started_at: float
+    visited_nodes: Annotated[list[str], operator.add]
+    security_failures: int
+    db_failures: int
+    cost_failures: int
 
 
 def create_initial_state(query: str, max_retries: int | None = None) -> DataAgentState:
@@ -106,9 +112,14 @@ def create_initial_state(query: str, max_retries: int | None = None) -> DataAgen
         result_row_count=0,
         result_truncated=False,
         execution_time_ms=0,
+        sql_cost={},
         result_summary={},
         interpretation="",
         final_answer="",
         trace=[],
         started_at=time.time(),
+        visited_nodes=[],
+        security_failures=0,
+        db_failures=0,
+        cost_failures=0,
     )

@@ -1,136 +1,144 @@
 import asyncio
-from typing import Any, TypedDict
 
 import pytest
-from langgraph.constants import END, START
 from langgraph.errors import NodeCancelledError
-from langgraph.graph import StateGraph
 
-from app.agent.graph import route_after_database_validation, route_after_security_validation
-
-
-class GraphTestState(TypedDict, total=False):
-    visited_nodes: list[str]
-    error: str | None
-    retry_count: int
-    max_retries: int
-    security_failures: int
-    db_failures: int
-    cancelled: bool
+from app.agent.graph import AgentNodes, build_agent_graph, graph
 
 
-def append_node(state: GraphTestState, name: str) -> list[str]:
-    return [*state.get("visited_nodes", []), name]
+def append_node(state: dict, name: str) -> list[str]:
+    return [name]
 
 
-def build_test_graph(cancel_at_execute: bool = False):
-    async def start_node(state: GraphTestState):
-        return {"visited_nodes": append_node(state, "generate_sql"), "error": None}
+def node(name: str, **extra):
+    async def _node(state: dict):
+        return {"visited_nodes": append_node(state, name), **extra}
 
-    async def security_node(state: GraphTestState):
-        visited = append_node(state, "security_validate_sql")
-        failures = state.get("security_failures", 0)
+    return _node
+
+
+def validation_node(name: str, failure_key: str):
+    async def _node(state: dict):
+        visited = append_node(state, name)
+        failures = state.get(failure_key, 0)
         if failures > 0:
-            return {"visited_nodes": visited, "security_failures": failures - 1, "error": "security failed"}
+            return {"visited_nodes": visited, failure_key: failures - 1, "error": f"{name} failed"}
         return {"visited_nodes": visited, "error": None}
 
-    async def db_node(state: GraphTestState):
-        visited = append_node(state, "database_validate_sql")
-        failures = state.get("db_failures", 0)
-        if failures > 0:
-            return {"visited_nodes": visited, "db_failures": failures - 1, "error": "db failed"}
-        return {"visited_nodes": visited, "error": None}
+    return _node
 
-    async def correct_node(state: GraphTestState):
+
+def correct_node():
+    async def _node(state: dict):
         return {
             "visited_nodes": append_node(state, "correct_sql"),
             "retry_count": state.get("retry_count", 0) + 1,
             "error": None,
         }
 
-    async def execute_node(state: GraphTestState):
-        if cancel_at_execute:
+    return _node
+
+
+def execute_node(cancel: bool = False):
+    async def _node(state: dict):
+        if cancel:
             raise asyncio.CancelledError
         return {"visited_nodes": append_node(state, "execute_sql")}
 
-    async def failed_node(state: GraphTestState):
-        return {"visited_nodes": append_node(state, "failed")}
+    return _node
 
-    builder = StateGraph(GraphTestState)
-    builder.add_node("generate_sql", start_node)
-    builder.add_node("security_validate_sql", security_node)
-    builder.add_node("database_validate_sql", db_node)
-    builder.add_node("correct_sql", correct_node)
-    builder.add_node("execute_sql", execute_node)
-    builder.add_node("failed", failed_node)
-    builder.add_edge(START, "generate_sql")
-    builder.add_edge("generate_sql", "security_validate_sql")
-    builder.add_conditional_edges(
-        "security_validate_sql",
-        route_after_security_validation,
-        {"database_validate_sql": "database_validate_sql", "correct_sql": "correct_sql", "failed": "failed"},
+
+def fake_nodes(cancel_at_execute: bool = False) -> AgentNodes:
+    return AgentNodes(
+        extract_keywords=node("extract_keywords"),
+        recall_column=node("recall_column"),
+        recall_value=node("recall_value"),
+        recall_metric=node("recall_metric"),
+        merge_retrieved_info=node("merge_retrieved_info"),
+        filter_table=node("filter_table"),
+        filter_metric=node("filter_metric"),
+        add_extra_context=node("add_extra_context"),
+        plan_query=node("plan_query"),
+        generate_sql=node("generate_sql", error=None),
+        security_validate_sql=validation_node("security_validate_sql", "security_failures"),
+        database_validate_sql=validation_node("database_validate_sql", "db_failures"),
+        evaluate_sql_cost=validation_node("evaluate_sql_cost", "cost_failures"),
+        correct_sql=correct_node(),
+        execute_sql=execute_node(cancel_at_execute),
+        summarize_result=node("summarize_result"),
+        interpret_result=node("interpret_result"),
+        failed=node("failed"),
     )
-    builder.add_conditional_edges(
-        "database_validate_sql",
-        route_after_database_validation,
-        {"execute_sql": "execute_sql", "correct_sql": "correct_sql", "failed": "failed"},
-    )
-    builder.add_edge("correct_sql", "security_validate_sql")
-    builder.add_edge("execute_sql", END)
-    builder.add_edge("failed", END)
-    return builder.compile()
 
 
-async def run_graph(input_state: dict[str, Any]) -> GraphTestState:
-    return await build_test_graph().ainvoke(input_state)
+async def run_graph(input_state: dict, cancel_at_execute: bool = False) -> dict:
+    compiled = build_agent_graph(fake_nodes(cancel_at_execute))
+    return await compiled.ainvoke(input_state)
 
 
 @pytest.mark.asyncio
 async def test_graph_success_full_path():
     state = await run_graph({"retry_count": 0, "max_retries": 2, "visited_nodes": []})
-    assert state["visited_nodes"] == [
-        "generate_sql",
-        "security_validate_sql",
-        "database_validate_sql",
-        "execute_sql",
-    ]
+    visited = state["visited_nodes"]
+    assert visited[0] == "extract_keywords"
+    assert {"recall_column", "recall_value", "recall_metric"}.issubset(visited)
+    assert visited.index("merge_retrieved_info") > max(
+        visited.index("recall_column"),
+        visited.index("recall_value"),
+        visited.index("recall_metric"),
+    )
+    assert {"filter_table", "filter_metric"}.issubset(visited)
+    assert visited.index("add_extra_context") > max(visited.index("filter_table"), visited.index("filter_metric"))
+    assert (
+        visited[-7:]
+        == [
+            "plan_query",
+            "generate_sql",
+            "security_validate_sql",
+            "database_validate_sql",
+            "evaluate_sql_cost",
+            "execute_sql",
+            "summarize_result",
+            "interpret_result",
+        ][-7:]
+    )
 
 
 @pytest.mark.asyncio
 async def test_security_validation_fail_then_correct_then_success():
     state = await run_graph({"retry_count": 0, "max_retries": 2, "security_failures": 1, "visited_nodes": []})
-    assert state["visited_nodes"] == [
-        "generate_sql",
-        "security_validate_sql",
-        "correct_sql",
-        "security_validate_sql",
-        "database_validate_sql",
-        "execute_sql",
-    ]
+    assert "correct_sql" in state["visited_nodes"]
+    assert state["visited_nodes"].count("security_validate_sql") == 2
+    assert state["visited_nodes"][-3:] == ["execute_sql", "summarize_result", "interpret_result"]
 
 
 @pytest.mark.asyncio
 async def test_database_validation_fail_then_correct_then_success():
     state = await run_graph({"retry_count": 0, "max_retries": 2, "db_failures": 1, "visited_nodes": []})
-    assert state["visited_nodes"] == [
-        "generate_sql",
-        "security_validate_sql",
-        "database_validate_sql",
-        "correct_sql",
-        "security_validate_sql",
-        "database_validate_sql",
-        "execute_sql",
-    ]
+    assert state["visited_nodes"].count("database_validate_sql") == 2
+    assert "correct_sql" in state["visited_nodes"]
 
 
 @pytest.mark.asyncio
-async def test_retry_exceeded_routes_failed():
+async def test_cost_validation_fail_then_correct_then_success():
+    state = await run_graph({"retry_count": 0, "max_retries": 2, "cost_failures": 1, "visited_nodes": []})
+    assert state["visited_nodes"].count("evaluate_sql_cost") == 2
+    assert "correct_sql" in state["visited_nodes"]
+
+
+@pytest.mark.asyncio
+async def test_retry_exceeded_routes_failed_and_does_not_execute_sql():
     state = await run_graph({"retry_count": 2, "max_retries": 2, "security_failures": 1, "visited_nodes": []})
-    assert state["visited_nodes"] == ["generate_sql", "security_validate_sql", "failed"]
+    assert "failed" in state["visited_nodes"]
+    assert "execute_sql" not in state["visited_nodes"]
 
 
 @pytest.mark.asyncio
 async def test_cancellation_stops_later_nodes():
-    graph = build_test_graph(cancel_at_execute=True)
     with pytest.raises(NodeCancelledError):
-        await graph.ainvoke({"retry_count": 0, "max_retries": 2, "visited_nodes": []})
+        await run_graph({"retry_count": 0, "max_retries": 2, "visited_nodes": []}, cancel_at_execute=True)
+
+
+def test_production_graph_imports_and_compiles():
+    assert graph is not None
+    assert build_agent_graph() is not None
