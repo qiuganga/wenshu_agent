@@ -110,7 +110,7 @@ class QueryService:
         if query_request.max_rows is not None:
             state["max_result_rows"] = min(query_request.max_rows, app_config.agent.max_result_rows)
 
-        queue: asyncio.Queue[Any] = asyncio.Queue()
+        queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=app_config.agent.sse_queue_maxsize)
         graph_task = asyncio.create_task(self._produce_graph_chunks(queue, state))
         disconnect_task = (
             asyncio.create_task(watch_disconnect(request, app_config.agent.disconnect_poll_interval_seconds))

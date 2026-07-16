@@ -58,6 +58,15 @@ async def interpret_result(state: DataAgentState, runtime: Runtime[DataAgentCont
     chain = prompt | llm | StrOutputParser()
 
     chunks: list[str] = []
+    token_buffer: list[str] = []
+
+    def flush_token_buffer() -> None:
+        if not token_buffer:
+            return
+        delta = "".join(token_buffer)
+        token_buffer.clear()
+        writer({"event": "result", "node": "interpret_result", "message": "Interpreting result", "answer_delta": delta})
+
     async for token in chain.astream(
         {
             "query": state["query"],
@@ -65,7 +74,10 @@ async def interpret_result(state: DataAgentState, runtime: Runtime[DataAgentCont
         }
     ):
         chunks.append(token)
-        writer({"event": "result", "node": "interpret_result", "message": "Interpreting result", "answer_delta": token})
+        token_buffer.append(token)
+        if sum(len(part) for part in token_buffer) >= app_config.agent.token_batch_chars:
+            flush_token_buffer()
+    flush_token_buffer()
 
     interpretation = "".join(chunks)
     logger.info(f"result interpreted chars={len(interpretation)}")
