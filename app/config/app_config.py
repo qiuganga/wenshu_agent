@@ -108,6 +108,12 @@ class SecurityConfig:
 
 
 @dataclass
+class MetadataSyncConfig:
+    max_values_per_column: int = 5000
+    batch_size: int = 100
+
+
+@dataclass
 class AppConfig:
     app: AppMetaConfig = field(default_factory=AppMetaConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
@@ -119,6 +125,7 @@ class AppConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
+    metadata_sync: MetadataSyncConfig = field(default_factory=MetadataSyncConfig)
 
 
 config_file = Path(__file__).parents[2] / "conf" / "app_config.yaml"
@@ -153,3 +160,7 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("agent.sse_queue_maxsize must be greater than 0")
     if config.agent.token_batch_chars <= 0:
         raise ValueError("agent.token_batch_chars must be greater than 0")
+    if config.metadata_sync.max_values_per_column <= 0:
+        raise ValueError("metadata_sync.max_values_per_column must be greater than 0")
+    if config.metadata_sync.batch_size <= 0:
+        raise ValueError("metadata_sync.batch_size must be greater than 0")

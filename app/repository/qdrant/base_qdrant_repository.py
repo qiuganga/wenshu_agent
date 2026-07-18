@@ -19,6 +19,14 @@ class BaseQdrantRepository[T]:
                 vectors_config=VectorParams(size=app_config.qdrant.embedding_size, distance=Distance.COSINE),
             )
 
+    async def recreate_collection(self):
+        if await self.client.collection_exists(self.collection_name):
+            await self.client.delete_collection(self.collection_name)
+        await self.client.create_collection(
+            self.collection_name,
+            vectors_config=VectorParams(size=app_config.qdrant.embedding_size, distance=Distance.COSINE),
+        )
+
     async def upsert(
         self,
         ids: list[str],

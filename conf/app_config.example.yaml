@@ -99,3 +99,7 @@ security:
     - secret
     - telephone
     - token
+
+metadata_sync:
+  max_values_per_column: 5000
+  batch_size: 100
