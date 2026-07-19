@@ -1,6 +1,7 @@
 from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
+from app.agent.error_policy import classify_retryable_error
 from app.agent.state import DataAgentState
 from app.config.app_config import app_config
 from app.core.exceptions import SQLSecurityError
@@ -44,7 +45,8 @@ async def security_validate_sql(state: DataAgentState, runtime: Runtime[DataAgen
             "sql_referenced_columns": validation.referenced_columns,
             "error": None,
             "error_code": None,
+            "retryable": None,
         }
     except SQLSecurityError as exc:
         logger.warning(f"sql security validation failed code={exc.code} message={exc.message}")
-        return {"error": exc.message, "error_code": exc.code}
+        return {"error": exc.message, "error_code": exc.code, "retryable": classify_retryable_error(exc.code)}

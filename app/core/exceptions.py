@@ -47,6 +47,16 @@ class AgentRetryExceededError(AppException):
         super().__init__("AGENT_RETRY_EXCEEDED", message, details, 400)
 
 
+class AgentNonRetryableError(AppException):
+    def __init__(self, message: str = "Agent execution failed with a non-retryable error", details: Any | None = None):
+        super().__init__("AGENT_NON_RETRYABLE", message, details, 400)
+
+
+class AgentExecutionFailedError(AppException):
+    def __init__(self, message: str = "Agent execution failed", details: Any | None = None):
+        super().__init__("AGENT_EXECUTION_FAILED", message, details, 400)
+
+
 def sanitize_exception(exc: Exception) -> AppException:
     if isinstance(exc, AppException):
         return exc

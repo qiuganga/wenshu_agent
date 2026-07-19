@@ -65,6 +65,7 @@ class DataAgentState(TypedDict, total=False):
     error: str | None
     error_code: str | None
     validation_detail: str | None
+    retryable: bool | None
     retry_count: int
     max_retries: int
     max_result_rows: int
@@ -107,6 +108,7 @@ def create_initial_state(query: str, max_retries: int | None = None) -> DataAgen
         error=None,
         error_code=None,
         validation_detail=None,
+        retryable=None,
         retry_count=0,
         max_retries=max_retries if max_retries is not None else app_config.agent.max_sql_retries,
         max_result_rows=app_config.agent.max_result_rows,

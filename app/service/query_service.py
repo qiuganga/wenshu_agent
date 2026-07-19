@@ -26,6 +26,10 @@ from app.repository.qdrant.metric_qdrant_repository import MetricQdrantRepositor
 _DONE = object()
 
 
+def _error_already_emitted(details: Any | None) -> bool:
+    return isinstance(details, dict) and details.get("error_already_emitted") is True
+
+
 async def watch_disconnect(request: Request, interval_seconds: float = 0.2) -> None:
     while True:
         if await request.is_disconnected():
@@ -151,12 +155,13 @@ class QueryService:
             raise
         except Exception as exc:
             app_exc = sanitize_exception(exc)
-            yield emit(
-                "error",
-                app_exc.message,
-                {"code": app_exc.code, "details": app_exc.details},
-                status="error",
-            )
+            if not _error_already_emitted(app_exc.details):
+                yield emit(
+                    "error",
+                    app_exc.message,
+                    {"code": app_exc.code, "details": app_exc.details},
+                    status="error",
+                )
             yield emit("done", "Agent execution finished with error", status="error")
         finally:
             graph_task.cancel()

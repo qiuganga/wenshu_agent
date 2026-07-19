@@ -1,6 +1,7 @@
 from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
+from app.agent.error_policy import classify_retryable_error
 from app.agent.state import DataAgentState
 from app.config.app_config import app_config
 from app.core.logging import logger
@@ -37,14 +38,21 @@ async def evaluate_sql_cost(state: DataAgentState, runtime: Runtime[DataAgentCon
             }
         )
         if not assessment.accepted:
+            error_code = "SQL_COST_TOO_HIGH"
             return {
                 "sql_cost": assessment.model_dump(),
                 "error": "SQL cost too high",
-                "error_code": "SQL_COST_TOO_HIGH",
+                "error_code": error_code,
+                "retryable": classify_retryable_error(error_code),
             }
-        return {"sql_cost": assessment.model_dump(), "error": None, "error_code": None}
+        return {"sql_cost": assessment.model_dump(), "error": None, "error_code": None, "retryable": None}
     except Exception as exc:
         logger.warning(f"sql cost assessment skipped reason={type(exc).__name__}")
         if app_config.agent.reject_on_cost_error:
-            return {"error": "SQL cost assessment failed", "error_code": "SQL_COST_ASSESSMENT_FAILED"}
-        return {"sql_cost": {}, "error": None, "error_code": None}
+            error_code = "SQL_COST_ASSESSMENT_FAILED"
+            return {
+                "error": "SQL cost assessment failed",
+                "error_code": error_code,
+                "retryable": classify_retryable_error(error_code),
+            }
+        return {"sql_cost": {}, "error": None, "error_code": None, "retryable": None}

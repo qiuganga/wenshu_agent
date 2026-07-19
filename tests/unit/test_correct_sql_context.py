@@ -55,5 +55,6 @@ async def test_correct_sql_prompt_receives_internal_context(monkeypatch):
     assert result["error"] is None
     assert result["error_code"] is None
     assert result["validation_detail"] is None
+    assert result["retryable"] is None
     assert "query_plan" not in result
     assert "table_infos" not in result

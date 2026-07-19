@@ -96,6 +96,7 @@ async def test_validate_sql_failure_returns_generic_error_and_sanitized_detail()
 
     assert result["error"] == "SQL validation failed"
     assert result["error_code"] == "SQL_VALIDATION_FAILED"
+    assert result["retryable"] is True
     assert "Unknown table 'missing_table'" in result["validation_detail"]
     assert "topsecret" not in result["validation_detail"]
     assert "postgresql://" not in result["validation_detail"]

@@ -68,4 +68,5 @@ async def correct_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
         "error": None,
         "error_code": None,
         "validation_detail": None,
+        "retryable": None,
     }
