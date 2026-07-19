@@ -94,14 +94,6 @@ class SQLGenerationResult(BaseModel):
     sql: str = Field(min_length=1)
 
 
-class TableSelectionResult(BaseModel):
-    tables: dict[str, list[str]] = Field(default_factory=dict)
-
-
-class MetricSelectionResult(BaseModel):
-    metric_ids: list[str] = Field(default_factory=list)
-
-
 def _statement_type(expression: exp.Expression) -> str:
     if isinstance(expression, exp.Select | exp.Union | exp.Intersect | exp.Except):
         return "SELECT"
