@@ -67,7 +67,11 @@ agent:
   max_candidate_tables: 10
   max_candidate_metrics: 10
   max_estimated_rows: 100000
+  max_query_cost: 100000.0
   max_join_tables: 8
+  max_full_scan_fact_tables: 0
+  allow_dimension_full_scan: true
+  explain_timeout_seconds: 5
   reject_full_table_scan: false
   reject_filesort: false
   reject_temporary_table: false

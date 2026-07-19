@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
+from sqlalchemy.exc import DatabaseError, OperationalError, ProgrammingError
+
 RETRYABLE_ERROR_CODES = frozenset(
     {
         "SQL_SECURITY_FAILED",
@@ -25,10 +27,16 @@ NON_RETRYABLE_ERROR_CODES = frozenset(
         "INTERNAL_ERROR",
         "LLM_UNAVAILABLE",
         "PERMISSION_DENIED",
+        "EXPLAIN_TIMEOUT",
+        "QUERY_EXECUTION_TIMEOUT",
         "SQL_COST_ASSESSMENT_FAILED",
         "SQL_EXECUTION_FAILED",
     }
 )
+
+SQL_FIXABLE_MYSQL_ERRNOS = frozenset({1052, 1054, 1064, 1146})
+PERMISSION_MYSQL_ERRNOS = frozenset({1044, 1045, 1142, 1227})
+CONNECTION_MYSQL_ERRNOS = frozenset({2002, 2003, 2006, 2013, 2055})
 
 SQL_FIXABLE_DETAIL_SIGNALS = (
     "unknown column",
@@ -49,6 +57,8 @@ SAFE_ERROR_MESSAGES = {
     "DB_CONNECTION_FAILED": "数据服务暂时不可用，请稍后重试。",
     "PERMISSION_DENIED": "当前请求无法访问所需数据。",
     "LLM_UNAVAILABLE": "智能分析服务暂时不可用，请稍后重试。",
+    "EXPLAIN_TIMEOUT": "数据库成本评估超时，请缩小时间范围或简化查询条件。",
+    "QUERY_EXECUTION_TIMEOUT": "数据库查询执行超时，请缩小时间范围或简化查询条件。",
 }
 DEFAULT_SAFE_ERROR_MESSAGE = "本次查询未能完成，请稍后重试或调整问题描述。"
 
@@ -58,6 +68,54 @@ class FailurePolicy:
     error_code: str
     retryable: bool
     user_message: str
+
+
+def _iter_exception_values(exc: BaseException):
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        yield current
+        original = getattr(current, "orig", None)
+        if isinstance(original, BaseException):
+            yield original
+        current = current.__cause__ or current.__context__
+
+
+def _mysql_errno(exc: BaseException) -> int | None:
+    for item in _iter_exception_values(exc):
+        code = getattr(item, "errno", None)
+        if isinstance(code, int):
+            return code
+        for arg in getattr(item, "args", ()):
+            if isinstance(arg, int):
+                return arg
+            if isinstance(arg, tuple):
+                for nested in arg:
+                    if isinstance(nested, int):
+                        return nested
+    return None
+
+
+def classify_database_error(exc: BaseException, *, default_error_code: str = "DATABASE_UNAVAILABLE") -> str:
+    if isinstance(exc, asyncio.CancelledError):
+        raise exc
+
+    errno = _mysql_errno(exc)
+    if errno in SQL_FIXABLE_MYSQL_ERRNOS:
+        return "SQL_VALIDATION_FAILED"
+    if errno in PERMISSION_MYSQL_ERRNOS:
+        return "PERMISSION_DENIED"
+    if errno in CONNECTION_MYSQL_ERRNOS:
+        return "DB_CONNECTION_FAILED"
+
+    if isinstance(exc, ProgrammingError):
+        return "SQL_VALIDATION_FAILED"
+    if isinstance(exc, OperationalError):
+        return "DB_CONNECTION_FAILED"
+    if isinstance(exc, DatabaseError):
+        return default_error_code
+    return default_error_code
 
 
 def classify_retryable_error(

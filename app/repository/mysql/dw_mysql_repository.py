@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from typing import Any
 
@@ -47,10 +48,41 @@ class DWMySQLRepository:
     async def validate_sql(self, sql: str):
         await self.session.execute(text(f"explain {sql}"))
 
-    async def explain_json(self, sql: str) -> str:
-        result = await self.session.execute(text(f"explain format=json {sql}"))
-        value = result.scalar()
-        return str(value or "{}")
+    async def _invalidate_session(self) -> None:
+        invalidate = getattr(self.session, "invalidate", None)
+        if callable(invalidate):
+            result = invalidate()
+            if inspect.isawaitable(result):
+                await result
+            return
+        await self.session.rollback()
+
+    async def _best_effort_statement_timeout(self, timeout_seconds: int) -> None:
+        timeout_ms = max(1, int(timeout_seconds * 1000))
+        try:
+            await self.session.execute(text(f"SET SESSION MAX_EXECUTION_TIME={timeout_ms}"))
+        except Exception as exc:  # pragma: no cover - depends on database flavor and permissions
+            logger.warning(f"statement timeout setup skipped reason={type(exc).__name__}")
+
+    async def explain_json(self, sql: str, timeout_seconds: int | None = None) -> str:
+        effective_timeout = timeout_seconds or app_config.agent.explain_timeout_seconds
+        try:
+            await self._best_effort_statement_timeout(effective_timeout)
+            result = await self.session.execute(text(f"explain format=json {sql}"))
+            value = result.scalar()
+            return str(value or "{}")
+        except asyncio.CancelledError:
+            await self._invalidate_session()
+            raise
+        except TimeoutError:
+            await self._invalidate_session()
+            raise
+        except Exception:
+            await self.session.rollback()
+            raise
+        finally:
+            if self.session.in_transaction():
+                await self.session.rollback()
 
     async def _best_effort_readonly_session(self, timeout_seconds: int) -> None:
         timeout_ms = max(1, int(timeout_seconds * 1000))
@@ -85,7 +117,10 @@ class DWMySQLRepository:
                 execution_time_ms=int((time.perf_counter() - started_at) * 1000),
             )
         except asyncio.CancelledError:
-            await self.session.rollback()
+            await self._invalidate_session()
+            raise
+        except TimeoutError:
+            await self._invalidate_session()
             raise
         except Exception:
             await self.session.rollback()
