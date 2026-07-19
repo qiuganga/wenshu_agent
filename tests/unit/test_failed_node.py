@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.agent.nodes import failed as failed_module
 from app.agent.nodes.failed import failed
 from app.core.exceptions import AgentNonRetryableError, AgentRetryExceededError
 
@@ -75,3 +76,65 @@ async def test_failed_node_default_message_is_safe():
 
     assert events[0]["code"] == "AGENT_FAILED"
     assert events[0]["message"] == "本次查询未能完成，请稍后重试或调整问题描述。"
+
+
+@pytest.mark.asyncio
+async def test_failed_node_maps_query_timeout_without_internal_detail():
+    events = []
+    runtime = SimpleNamespace(stream_writer=events.append)
+    state = {
+        "error": "SQL execution timed out password=secret",
+        "error_code": "QUERY_EXECUTION_TIMEOUT",
+        "retryable": False,
+        "retry_count": 0,
+        "max_retries": 2,
+    }
+
+    with pytest.raises(AgentNonRetryableError):
+        await failed(state, runtime)
+
+    assert events[0]["code"] == "QUERY_EXECUTION_TIMEOUT"
+    assert "secret" not in str(events)
+    assert "超时" in events[0]["message"]
+
+
+@pytest.mark.asyncio
+async def test_failed_node_skips_duplicate_audit_when_already_logged(monkeypatch):
+    calls = []
+    monkeypatch.setattr(failed_module, "log_query_audit", lambda **kwargs: calls.append(kwargs))
+    runtime = SimpleNamespace(stream_writer=lambda event: None)
+    state = {
+        "error_code": "SQL_COST_TOO_HIGH",
+        "retryable": True,
+        "retry_count": 2,
+        "max_retries": 2,
+        "audit_logged": True,
+    }
+
+    with pytest.raises(AgentRetryExceededError):
+        await failed(state, runtime)
+
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_failed_node_records_cost_rejection_audit(monkeypatch):
+    calls = []
+    monkeypatch.setattr(failed_module, "log_query_audit", lambda **kwargs: calls.append(kwargs))
+    runtime = SimpleNamespace(stream_writer=lambda event: None)
+    state = {
+        "sql": "select amount from fact_order",
+        "sql_referenced_tables": ["fact_order"],
+        "sql_cost": {"estimated_rows": 1000000, "query_cost": 10.0},
+        "error_code": "SQL_COST_TOO_HIGH",
+        "retryable": True,
+        "retry_count": 2,
+        "max_retries": 2,
+    }
+
+    with pytest.raises(AgentRetryExceededError):
+        await failed(state, runtime)
+
+    assert calls[0]["final_status"] == "rejected"
+    assert calls[0]["error_code"] == "SQL_COST_TOO_HIGH"
+    assert calls[0]["referenced_tables"] == ["fact_order"]

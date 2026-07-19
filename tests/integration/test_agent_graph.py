@@ -47,16 +47,23 @@ def correct_node():
     return _node
 
 
-def execute_node(cancel: bool = False):
+def execute_node(cancel: bool = False, fail: bool = False):
     async def _node(state: dict):
         if cancel:
             raise asyncio.CancelledError
+        if fail:
+            return {
+                "visited_nodes": append_node(state, "execute_sql"),
+                "error": "SQL execution timed out",
+                "error_code": "QUERY_EXECUTION_TIMEOUT",
+                "retryable": False,
+            }
         return {"visited_nodes": append_node(state, "execute_sql")}
 
     return _node
 
 
-def fake_nodes(cancel_at_execute: bool = False) -> AgentNodes:
+def fake_nodes(cancel_at_execute: bool = False, fail_at_execute: bool = False) -> AgentNodes:
     return AgentNodes(
         extract_keywords=node("extract_keywords"),
         recall_column=node("recall_column"),
@@ -72,15 +79,15 @@ def fake_nodes(cancel_at_execute: bool = False) -> AgentNodes:
         database_validate_sql=validation_node("database_validate_sql", "db_failures", "SQL_VALIDATION_FAILED"),
         evaluate_sql_cost=validation_node("evaluate_sql_cost", "cost_failures", "SQL_COST_TOO_HIGH"),
         correct_sql=correct_node(),
-        execute_sql=execute_node(cancel_at_execute),
+        execute_sql=execute_node(cancel_at_execute, fail_at_execute),
         summarize_result=node("summarize_result"),
         interpret_result=node("interpret_result"),
         failed=node("failed"),
     )
 
 
-async def run_graph(input_state: dict, cancel_at_execute: bool = False) -> dict:
-    compiled = build_agent_graph(fake_nodes(cancel_at_execute))
+async def run_graph(input_state: dict, cancel_at_execute: bool = False, fail_at_execute: bool = False) -> dict:
+    compiled = build_agent_graph(fake_nodes(cancel_at_execute, fail_at_execute))
     return await compiled.ainvoke(input_state)
 
 
@@ -145,6 +152,15 @@ async def test_retry_exceeded_routes_failed_and_does_not_execute_sql():
 async def test_cancellation_stops_later_nodes():
     with pytest.raises(NodeCancelledError):
         await run_graph({"retry_count": 0, "max_retries": 2, "visited_nodes": []}, cancel_at_execute=True)
+
+
+@pytest.mark.asyncio
+async def test_execute_failure_routes_to_failed_without_summarize_result():
+    state = await run_graph({"retry_count": 0, "max_retries": 2, "visited_nodes": []}, fail_at_execute=True)
+
+    assert "failed" in state["visited_nodes"]
+    assert "summarize_result" not in state["visited_nodes"]
+    assert "interpret_result" not in state["visited_nodes"]
 
 
 def test_production_graph_imports_and_compiles():

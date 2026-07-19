@@ -1,6 +1,7 @@
 from app.agent.graph import (
     route_after_cost_validation,
     route_after_database_validation,
+    route_after_execution,
     route_after_security_validation,
 )
 
@@ -43,3 +44,18 @@ def test_retryable_none_uses_error_code_default_for_sql_errors():
 def test_retryable_none_unknown_error_routes_to_failed():
     state = {"error": "unknown", "retryable": None, "retry_count": 0, "max_retries": 2}
     assert route_after_security_validation(state) == "failed"
+
+
+def test_execute_success_routes_to_summarize_result():
+    assert route_after_execution({"error": None}) == "summarize_result"
+
+
+def test_execute_timeout_routes_to_failed():
+    state = {
+        "error": "SQL execution timed out",
+        "error_code": "QUERY_EXECUTION_TIMEOUT",
+        "retryable": False,
+        "retry_count": 0,
+        "max_retries": 2,
+    }
+    assert route_after_execution(state) == "failed"
