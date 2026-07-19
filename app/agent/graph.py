@@ -106,6 +106,10 @@ def route_after_cost_validation(state: DataAgentState) -> str:
     return _route_after_validation_error(state, "execute_sql")
 
 
+def route_after_execution(state: DataAgentState) -> str:
+    return _route_after_validation_error(state, "summarize_result")
+
+
 def build_agent_graph(nodes: AgentNodes | None = None):
     active_nodes = nodes or default_agent_nodes()
     graph_builder = StateGraph(state_schema=DataAgentState, context_schema=DataAgentContext)
@@ -160,7 +164,11 @@ def build_agent_graph(nodes: AgentNodes | None = None):
         {"execute_sql": "execute_sql", "correct_sql": "correct_sql", "failed": "failed"},
     )
     graph_builder.add_edge("correct_sql", "security_validate_sql")
-    graph_builder.add_edge("execute_sql", "summarize_result")
+    graph_builder.add_conditional_edges(
+        "execute_sql",
+        route_after_execution,
+        {"summarize_result": "summarize_result", "correct_sql": "correct_sql", "failed": "failed"},
+    )
     graph_builder.add_edge("summarize_result", "interpret_result")
     graph_builder.add_edge("interpret_result", END)
     graph_builder.add_edge("failed", END)

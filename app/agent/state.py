@@ -78,6 +78,7 @@ class DataAgentState(TypedDict, total=False):
     interpretation: str
     final_answer: str
     trace: list[dict[str, Any]]
+    audit_logged: bool
     started_at: float
     visited_nodes: Annotated[list[str], operator.add]
     security_failures: int
@@ -121,6 +122,7 @@ def create_initial_state(query: str, max_retries: int | None = None) -> DataAgen
         interpretation="",
         final_answer="",
         trace=[],
+        audit_logged=False,
         started_at=time.time(),
         visited_nodes=[],
         security_failures=0,

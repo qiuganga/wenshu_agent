@@ -93,7 +93,11 @@ class AgentConfig:
     max_candidate_tables: int = 10
     max_candidate_metrics: int = 10
     max_estimated_rows: int = 100000
+    max_query_cost: float = 100000.0
     max_join_tables: int = 8
+    max_full_scan_fact_tables: int = 0
+    allow_dimension_full_scan: bool = True
+    explain_timeout_seconds: int = 5
     reject_full_table_scan: bool = False
     reject_filesort: bool = False
     reject_temporary_table: bool = False
@@ -157,8 +161,24 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("agent.max_sse_payload_bytes is too small")
     if config.agent.max_estimated_rows <= 0:
         raise ValueError("agent.max_estimated_rows must be greater than 0")
+    if config.agent.max_estimated_rows > 1_000_000_000:
+        raise ValueError("agent.max_estimated_rows must be <= 1000000000")
+    if config.agent.max_query_cost <= 0:
+        raise ValueError("agent.max_query_cost must be greater than 0")
+    if config.agent.max_query_cost > 1_000_000_000:
+        raise ValueError("agent.max_query_cost must be <= 1000000000")
     if config.agent.max_join_tables <= 0:
         raise ValueError("agent.max_join_tables must be greater than 0")
+    if config.agent.max_join_tables > 64:
+        raise ValueError("agent.max_join_tables must be <= 64")
+    if config.agent.max_full_scan_fact_tables < 0:
+        raise ValueError("agent.max_full_scan_fact_tables must be >= 0")
+    if config.agent.max_full_scan_fact_tables > config.agent.max_join_tables:
+        raise ValueError("agent.max_full_scan_fact_tables must be <= agent.max_join_tables")
+    if config.agent.explain_timeout_seconds <= 0:
+        raise ValueError("agent.explain_timeout_seconds must be greater than 0")
+    if config.agent.explain_timeout_seconds > 60:
+        raise ValueError("agent.explain_timeout_seconds must be <= 60")
     if config.agent.disconnect_poll_interval_seconds <= 0:
         raise ValueError("agent.disconnect_poll_interval_seconds must be greater than 0")
     if config.agent.sse_queue_maxsize <= 0:

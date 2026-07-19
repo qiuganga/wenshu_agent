@@ -1,8 +1,9 @@
 import asyncio
 
 import pytest
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
-from app.agent.error_policy import classify_retryable_error, failure_policy, safe_error_message
+from app.agent.error_policy import classify_database_error, classify_retryable_error, failure_policy, safe_error_message
 
 
 @pytest.mark.parametrize(
@@ -26,6 +27,8 @@ def test_retryable_error_codes(error_code):
         "PERMISSION_DENIED",
         "DB_CONNECTION_FAILED",
         "DATABASE_UNAVAILABLE",
+        "EXPLAIN_TIMEOUT",
+        "QUERY_EXECUTION_TIMEOUT",
         "SQL_COST_ASSESSMENT_FAILED",
         "SQL_EXECUTION_FAILED",
         "LLM_UNAVAILABLE",
@@ -61,3 +64,27 @@ def test_failure_policy_uses_retryable_override():
     assert policy.error_code == "PERMISSION_DENIED"
     assert policy.retryable is True
     assert policy.user_message == "当前请求无法访问所需数据。"
+
+
+class FakeOrig(Exception):
+    def __init__(self, errno):
+        super().__init__(errno, "safe")
+        self.errno = errno
+
+
+def test_database_error_classification_uses_mysql_errno_for_fixable_sql():
+    exc = ProgrammingError("select", {}, FakeOrig(1054))
+
+    assert classify_database_error(exc) == "SQL_VALIDATION_FAILED"
+
+
+def test_database_error_classification_uses_mysql_errno_for_connection_failure():
+    exc = OperationalError("select", {}, FakeOrig(2003))
+
+    assert classify_database_error(exc) == "DB_CONNECTION_FAILED"
+
+
+def test_database_error_classification_uses_mysql_errno_for_permission_failure():
+    exc = OperationalError("select", {}, FakeOrig(1045))
+
+    assert classify_database_error(exc) == "PERMISSION_DENIED"
