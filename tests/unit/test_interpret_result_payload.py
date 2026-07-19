@@ -16,6 +16,20 @@ def test_final_payload_default_excludes_sql_and_raw_rows(monkeypatch):
     assert payload == {"final_answer": "ok", "result_summary": {"row_count": 1}}
 
 
+def test_final_payload_preserves_split_truncation_summary(monkeypatch):
+    monkeypatch.setattr(app_config.agent, "expose_sql_to_client", False)
+    monkeypatch.setattr(app_config.agent, "expose_raw_rows_to_client", False)
+    result_summary = {
+        "row_count": 2,
+        "query_result_truncated": False,
+        "sample_truncated": True,
+        "truncated": True,
+    }
+    payload = _final_payload({"result_summary": result_summary}, "ok")
+
+    assert payload == {"final_answer": "ok", "result_summary": result_summary}
+
+
 def test_final_payload_raw_rows_are_capped_and_masked(monkeypatch):
     monkeypatch.setattr(app_config.agent, "expose_raw_rows_to_client", True)
     monkeypatch.setattr(app_config.agent, "result_sample_rows", 1)

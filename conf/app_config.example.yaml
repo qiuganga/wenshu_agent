@@ -54,6 +54,7 @@ agent:
   max_sql_retries: 2
   max_result_rows: 200
   result_sample_rows: 20
+  result_sample_value_max_chars: 500
   query_timeout_seconds: 10
   llm_output_parse_retries: 2
   allow_select_star: false

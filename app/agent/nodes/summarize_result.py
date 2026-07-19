@@ -15,6 +15,8 @@ async def summarize_result(state: DataAgentState, runtime: Runtime[DataAgentCont
         state.get("result", []),
         sample_n=app_config.agent.result_sample_rows,
         truncated=state.get("result_truncated", False),
+        sensitive_fields=app_config.security.sensitive_fields,
+        sample_value_max_chars=app_config.agent.result_sample_value_max_chars,
     )
     logger.info(f"result summarized rows={summary['row_count']} columns={len(summary['columns'])}")
     return {"result_summary": summary}

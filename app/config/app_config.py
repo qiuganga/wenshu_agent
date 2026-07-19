@@ -80,6 +80,7 @@ class AgentConfig:
     max_sql_retries: int = 2
     max_result_rows: int = 200
     result_sample_rows: int = 20
+    result_sample_value_max_chars: int = 500
     query_timeout_seconds: int = 10
     llm_output_parse_retries: int = 2
     allow_select_star: bool = False
@@ -142,6 +143,10 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("agent.max_result_rows must be greater than 0")
     if config.agent.result_sample_rows <= 0:
         raise ValueError("agent.result_sample_rows must be greater than 0")
+    if config.agent.result_sample_value_max_chars <= 0:
+        raise ValueError("agent.result_sample_value_max_chars must be greater than 0")
+    if config.agent.result_sample_value_max_chars > 5000:
+        raise ValueError("agent.result_sample_value_max_chars must be <= 5000")
     if config.agent.result_sample_rows > config.agent.max_result_rows:
         raise ValueError("agent.result_sample_rows must be <= agent.max_result_rows")
     if config.agent.query_timeout_seconds <= 0:
