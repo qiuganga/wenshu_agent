@@ -3,8 +3,7 @@ from pathlib import Path
 
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 
-from app.config.config_loader import load_config
-from app.config.meta_config import MetaConfig
+from app.config.meta_config import MetaConfig, load_meta_config
 from app.core.logging import logger
 from app.models.es.value_info_es import ValueInfoES
 from app.models.mysql.column_info_mysql import ColumnInfoMySQL
@@ -233,7 +232,7 @@ class MetaKnowledgeService:
 
     async def build(self, config_path: Path):
         # 1.加载配置文件
-        meta_config: MetaConfig = load_config(config_path, MetaConfig)
+        meta_config: MetaConfig = load_meta_config(config_path)
         logger.info("加载配置文件")
         # 2.处理表信息
         if meta_config.tables:

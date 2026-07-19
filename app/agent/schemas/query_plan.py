@@ -20,8 +20,8 @@ class SQLGenerationResult(BaseModel):
 
 
 class TableSelectionResult(BaseModel):
-    tables: dict[str, list[str]] = Field(default_factory=dict)
+    selected_tables: list[str] = Field(default_factory=list)
 
 
 class MetricSelectionResult(BaseModel):
-    metric_ids: list[str] = Field(default_factory=list)
+    selected_metrics: list[str] = Field(default_factory=list)

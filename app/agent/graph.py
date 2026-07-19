@@ -8,6 +8,7 @@ from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 
 from app.agent.context import DataAgentContext
+from app.agent.error_policy import classify_retryable_error
 from app.agent.nodes.add_extra_context import add_extra_context
 from app.agent.nodes.correct_sql import correct_sql
 from app.agent.nodes.evaluate_sql_cost import evaluate_sql_cost
@@ -76,28 +77,33 @@ def default_agent_nodes() -> AgentNodes:
     )
 
 
-def route_after_security_validation(state: DataAgentState) -> str:
+def _route_after_validation_error(state: DataAgentState, success_node: str) -> str:
     if state.get("error") is None:
-        return "database_validate_sql"
+        return success_node
+
+    retryable = state.get("retryable")
+    if retryable is None:
+        retryable = classify_retryable_error(
+            state.get("error_code"),
+            validation_detail=state.get("validation_detail"),
+        )
+    if not retryable:
+        return "failed"
     if state.get("retry_count", 0) < state.get("max_retries", 2):
         return "correct_sql"
     return "failed"
+
+
+def route_after_security_validation(state: DataAgentState) -> str:
+    return _route_after_validation_error(state, "database_validate_sql")
 
 
 def route_after_database_validation(state: DataAgentState) -> str:
-    if state.get("error") is None:
-        return "evaluate_sql_cost"
-    if state.get("retry_count", 0) < state.get("max_retries", 2):
-        return "correct_sql"
-    return "failed"
+    return _route_after_validation_error(state, "evaluate_sql_cost")
 
 
 def route_after_cost_validation(state: DataAgentState) -> str:
-    if state.get("error") is None:
-        return "execute_sql"
-    if state.get("retry_count", 0) < state.get("max_retries", 2):
-        return "correct_sql"
-    return "failed"
+    return _route_after_validation_error(state, "execute_sql")
 
 
 def build_agent_graph(nodes: AgentNodes | None = None):

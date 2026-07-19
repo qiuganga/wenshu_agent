@@ -17,13 +17,19 @@ def node(name: str, **extra):
     return _node
 
 
-def validation_node(name: str, failure_key: str):
+def validation_node(name: str, failure_key: str, error_code: str):
     async def _node(state: dict):
         visited = append_node(state, name)
         failures = state.get(failure_key, 0)
         if failures > 0:
-            return {"visited_nodes": visited, failure_key: failures - 1, "error": f"{name} failed"}
-        return {"visited_nodes": visited, "error": None}
+            return {
+                "visited_nodes": visited,
+                failure_key: failures - 1,
+                "error": f"{name} failed",
+                "error_code": error_code,
+                "retryable": True,
+            }
+        return {"visited_nodes": visited, "error": None, "error_code": None, "retryable": None}
 
     return _node
 
@@ -34,6 +40,8 @@ def correct_node():
             "visited_nodes": append_node(state, "correct_sql"),
             "retry_count": state.get("retry_count", 0) + 1,
             "error": None,
+            "error_code": None,
+            "retryable": None,
         }
 
     return _node
@@ -60,9 +68,9 @@ def fake_nodes(cancel_at_execute: bool = False) -> AgentNodes:
         add_extra_context=node("add_extra_context"),
         plan_query=node("plan_query"),
         generate_sql=node("generate_sql", error=None),
-        security_validate_sql=validation_node("security_validate_sql", "security_failures"),
-        database_validate_sql=validation_node("database_validate_sql", "db_failures"),
-        evaluate_sql_cost=validation_node("evaluate_sql_cost", "cost_failures"),
+        security_validate_sql=validation_node("security_validate_sql", "security_failures", "SQL_SECURITY_FAILED"),
+        database_validate_sql=validation_node("database_validate_sql", "db_failures", "SQL_VALIDATION_FAILED"),
+        evaluate_sql_cost=validation_node("evaluate_sql_cost", "cost_failures", "SQL_COST_TOO_HIGH"),
         correct_sql=correct_node(),
         execute_sql=execute_node(cancel_at_execute),
         summarize_result=node("summarize_result"),

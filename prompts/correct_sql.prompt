@@ -20,6 +20,9 @@ Candidate table fields:
 Candidate metrics:
 {metric_infos}
 
+Query plan:
+{query_plan}
+
 Date information:
 {date_info}
 
@@ -31,5 +34,14 @@ SQL to fix:
 
 Validation error:
 {error}
+
+Stable error code:
+{error_code}
+
+Internal validation detail:
+{validation_detail}
+
+SQL cost assessment:
+{sql_cost}
 
 Corrected JSON:

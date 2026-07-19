@@ -45,6 +45,9 @@ async def execute_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
             "result_row_count": execution.row_count,
             "result_truncated": execution.truncated,
             "execution_time_ms": execution.execution_time_ms,
+            "error": None,
+            "error_code": None,
+            "retryable": None,
         }
     except TimeoutError as exc:
         logger.exception("sql execution timed out")

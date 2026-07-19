@@ -220,7 +220,7 @@ git checkout feature/interview-project-upgrade
 uv sync
 Copy-Item conf\app_config.example.yaml conf\app_config.yaml
 docker compose -f docker/docker-compose.yaml up -d
-uv run python -m app.scripts.bootstrap_demo
+uv run python -m app.scripts.bootstrap_demo --check-only
 uv run fastapi dev main.py
 ```
 
@@ -233,7 +233,7 @@ git checkout feature/interview-project-upgrade
 uv sync
 cp conf/app_config.example.yaml conf/app_config.yaml
 docker compose -f docker/docker-compose.yaml up -d
-uv run python -m app.scripts.bootstrap_demo
+uv run python -m app.scripts.bootstrap_demo --check-only
 uv run fastapi dev main.py
 ```
 
@@ -293,21 +293,81 @@ CI 不依赖真实 MySQL、Qdrant、Elasticsearch 或 LLM。
 
 Dependabot 配置在 `.github/dependabot.yml`，覆盖 Python 依赖和 GitHub Actions。
 
+## 元数据同步
+
+元数据同步入口：
+
+```powershell
+uv run python -m app.scripts.sync_metadata --target all
+```
+
+安全预览，不写入 MySQL、Qdrant、Elasticsearch 或 Embedding 服务：
+
+```powershell
+uv run python -m app.scripts.sync_metadata --target all --dry-run
+```
+
+只同步 Qdrant 语义元数据：
+
+```powershell
+uv run python -m app.scripts.sync_metadata --target qdrant
+```
+
+只同步 Elasticsearch 字段值：
+
+```powershell
+uv run python -m app.scripts.sync_metadata --target es
+```
+
+可调参数：
+
+- `metadata_sync.max_values_per_column`：每个字段最多同步多少个去重字段值，默认 `5000`。
+- `metadata_sync.batch_size`：Qdrant upsert 和 Elasticsearch bulk 的批大小，默认 `100`。
+- `--recreate-index`：显式删除并重建 ES index，默认不会删除。
+- `--recreate-collections`：显式删除并重建 Qdrant collections，默认不会删除。
+
+数据边界：
+
+- `conf/meta_config.yaml` 是人工维护的语义定义来源，包含表、字段、指标、别名、描述和 `sync:true` 标记。
+- Qdrant 只存字段/指标语义 payload 和 embedding，不保存真实订单明细。
+- Elasticsearch 只存 `sync:true` 且非敏感字段的 DW `SELECT DISTINCT` 字段值，用于字段值召回。
+- `security.sensitive_fields` 中命中的字段不会同步到 ES，即使配置了 `sync:true`。
+- Elasticsearch 不是最终业务查询数据源；最终业务结果仍由 DW MySQL 执行 SQL 计算。
+- 重复执行同步会使用稳定 ID 覆盖同一份 Qdrant point / ES document，不会因为随机 ID 产生重复数据。
+
+同步命令会输出 JSON 摘要，例如：
+
+```json
+{
+  "status": "ok",
+  "columns_indexed": 25,
+  "metrics_indexed": 2,
+  "value_documents_indexed": 120,
+  "skipped_sensitive_columns": 1,
+  "truncated_columns": 0,
+  "duration_ms": 1234,
+  "errors": []
+}
+```
+
+验证方式：
+
+- 在 Qdrant Dashboard 查看字段和指标两个 collection 的 point 数量。
+- 在 Kibana 或 ES `_count` API 查看 `app_config.es.index_name` 对应 index 的 document 数量。
+- 先使用 `--dry-run` 对比预计同步规模，再执行真实同步。
+
 ## Demo 数据说明
 
-Demo 使用独立数据库名：
-
-- `wenshu_meta_demo`
-- `wenshu_dw_demo`
+Demo 使用 `conf/app_config.yaml` 中配置的 `db_meta.database` 和 `db_dw.database`，不再在脚本中硬编码数据库名。
 
 Demo 数据是合成数据，不包含真实个人信息。
 
 ```powershell
-uv run python -m app.scripts.bootstrap_demo
+uv run python -m app.scripts.bootstrap_demo --check-only
 uv run python -m app.scripts.reset_demo
 ```
 
-当前 bootstrap 脚本用于本地演示前置检查和幂等标记，完整生产级数据灌库仍属于后续增强项。
+当前 bootstrap 脚本用于本地演示前置检查；只有显式传入 `--sync-metadata` 时才会复用 `sync_metadata` 执行真实元数据同步。
 
 ## 离线评测说明
 
