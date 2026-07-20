@@ -29,7 +29,12 @@ async def test_correct_sql_prompt_receives_internal_context(monkeypatch):
         "normalized_sql": "select bad_column from fact_order",
         "sql_referenced_tables": ["fact_order"],
         "sql_referenced_columns": {"fact_order": ["bad_column"]},
-        "sql_cost": {"rejection_reasons": ["FACT_TABLE_FULL_SCAN"], "estimated_rows": 1000000},
+        "sql_cost": {
+            "rejection_reasons": ["FACT_TABLE_FULL_SCAN"],
+            "warnings": ["UNKNOWN_TABLE_ROLE"],
+            "table_roles": {"fact_order": "fact", "temporary_source": "unknown"},
+            "estimated_rows": 1000000,
+        },
         "error": "SQL validation failed",
         "error_code": "SQL_VALIDATION_FAILED",
         "validation_detail": "Unknown column 'bad_column' in 'field list'",
@@ -47,6 +52,8 @@ async def test_correct_sql_prompt_receives_internal_context(monkeypatch):
     assert payload["error_code"] == "SQL_VALIDATION_FAILED"
     assert payload["validation_detail"] == "Unknown column 'bad_column' in 'field list'"
     assert "FACT_TABLE_FULL_SCAN" in payload["sql_cost"]
+    assert "UNKNOWN_TABLE_ROLE" in payload["sql_cost"]
+    assert "temporary_source" in payload["sql_cost"]
     assert result["sql"] == "select order_amount from fact_order"
     assert result["normalized_sql"] == ""
     assert result["sql_referenced_tables"] == []

@@ -51,7 +51,10 @@ async def test_cost_high_is_retryable_and_keeps_rejection_reasons(monkeypatch):
     assert result["error_code"] == "SQL_COST_TOO_HIGH"
     assert result["retryable"] is True
     assert result["sql_cost"]["rejection_reasons"] == ["ESTIMATED_ROWS_EXCEEDED"]
+    assert result["sql_cost"]["table_roles"] == {"fact_order": "fact"}
+    assert result["sql_cost"]["query_cost_source"] == "unavailable"
     assert events[-1]["accepted"] is False
+    assert "query_cost_source" not in events[-1]
 
 
 @pytest.mark.asyncio
@@ -66,6 +69,8 @@ async def test_explain_uses_independent_timeout(monkeypatch):
     assert result["error_code"] == "EXPLAIN_TIMEOUT"
     assert result["retryable"] is False
     assert result["sql_cost"]["rejection_reasons"] == ["EXPLAIN_TIMEOUT"]
+    assert result["sql_cost"]["query_cost_source"] == "unavailable"
+    assert result["sql_cost"]["full_scan_unknown_tables"] == []
     assert all("explain" not in str(event).lower() for event in events if event.get("event") != "stage")
 
 

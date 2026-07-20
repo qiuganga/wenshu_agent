@@ -18,12 +18,16 @@ def _cost_summary(sql_cost: dict) -> dict:
         "estimated_rows": sql_cost.get("estimated_rows"),
         "estimated_rows_produced": sql_cost.get("estimated_rows_produced"),
         "query_cost": sql_cost.get("query_cost"),
+        "query_cost_source": sql_cost.get("query_cost_source"),
         "table_count": sql_cost.get("table_count"),
+        "table_roles": sql_cost.get("table_roles", {}),
         "full_scan_tables": sql_cost.get("full_scan_tables", []),
         "full_scan_fact_tables": sql_cost.get("full_scan_fact_tables", []),
+        "full_scan_unknown_tables": sql_cost.get("full_scan_unknown_tables", []),
         "uses_filesort": sql_cost.get("uses_filesort"),
         "uses_temporary_table": sql_cost.get("uses_temporary_table"),
         "rejection_reasons": sql_cost.get("rejection_reasons", []),
+        "warnings": sql_cost.get("warnings", []),
     }
 
 
@@ -44,6 +48,7 @@ async def evaluate_sql_cost(state: DataAgentState, runtime: Runtime[DataAgentCon
             max_query_cost=app_config.agent.max_query_cost,
             max_join_tables=app_config.agent.max_join_tables,
             max_full_scan_fact_tables=app_config.agent.max_full_scan_fact_tables,
+            max_unknown_full_scan_rows=app_config.agent.max_unknown_full_scan_rows,
             allow_dimension_full_scan=app_config.agent.allow_dimension_full_scan,
             reject_full_table_scan=app_config.agent.reject_full_table_scan,
             reject_filesort=app_config.agent.reject_filesort,
@@ -54,7 +59,8 @@ async def evaluate_sql_cost(state: DataAgentState, runtime: Runtime[DataAgentCon
             f"sql cost assessed request_id={request_id_ctx_var.get()} "
             f"accepted={assessment.accepted} estimated_rows={assessment.estimated_rows} "
             f"estimated_rows_produced={assessment.estimated_rows_produced} query_cost={assessment.query_cost} "
-            f"table_count={assessment.table_count} reasons={assessment.rejection_reasons}"
+            f"query_cost_source={assessment.query_cost_source} table_count={assessment.table_count} "
+            f"reasons={assessment.rejection_reasons} warnings={assessment.warnings}"
         )
         writer(
             {
@@ -93,13 +99,18 @@ async def evaluate_sql_cost(state: DataAgentState, runtime: Runtime[DataAgentCon
             "estimated_rows": 0,
             "estimated_rows_produced": 0,
             "query_cost": 0.0,
+            "query_cost_source": "unavailable",
+            "query_cost_components": {},
             "table_count": 0,
+            "table_roles": {},
             "full_scan_tables": [],
             "full_scan_fact_tables": [],
             "full_scan_dimension_tables": [],
+            "full_scan_unknown_tables": [],
             "uses_filesort": False,
             "uses_temporary_table": False,
             "rejection_reasons": [error_code],
+            "warnings": ["QUERY_COST_UNAVAILABLE"],
         }
         logger.warning(
             f"sql cost assessment timed out request_id={request_id_ctx_var.get()} "
@@ -126,13 +137,18 @@ async def evaluate_sql_cost(state: DataAgentState, runtime: Runtime[DataAgentCon
                 "estimated_rows": 0,
                 "estimated_rows_produced": 0,
                 "query_cost": 0.0,
+                "query_cost_source": "unavailable",
+                "query_cost_components": {},
                 "table_count": 0,
+                "table_roles": {},
                 "full_scan_tables": [],
                 "full_scan_fact_tables": [],
                 "full_scan_dimension_tables": [],
+                "full_scan_unknown_tables": [],
                 "uses_filesort": False,
                 "uses_temporary_table": False,
                 "rejection_reasons": ["COST_ASSESSMENT_FAILED"],
+                "warnings": ["QUERY_COST_UNAVAILABLE"],
             }
             error_message = (
                 "SQL validation failed" if error_code == "SQL_VALIDATION_FAILED" else "SQL cost assessment failed"
