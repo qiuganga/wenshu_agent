@@ -29,6 +29,14 @@ NON_RETRYABLE_ERROR_CODES = frozenset(
         "PERMISSION_DENIED",
         "EXPLAIN_TIMEOUT",
         "QUERY_EXECUTION_TIMEOUT",
+        "QUERY_CONCURRENCY_LIMIT",
+        "USER_QUERY_CONCURRENCY_LIMIT",
+        "QUERY_ADMISSION_TIMEOUT",
+        "QUERY_TOTAL_TIMEOUT",
+        "DUPLICATE_REQUEST",
+        "SSE_BACKPRESSURE_TIMEOUT",
+        "SSE_STREAM_CLOSED",
+        "SERVICE_SHUTTING_DOWN",
         "SQL_COST_ASSESSMENT_FAILED",
         "SQL_EXECUTION_FAILED",
     }
@@ -61,6 +69,19 @@ SAFE_ERROR_MESSAGES = {
     "QUERY_EXECUTION_TIMEOUT": "数据库查询执行超时，请缩小时间范围或简化查询条件。",
 }
 DEFAULT_SAFE_ERROR_MESSAGE = "本次查询未能完成，请稍后重试或调整问题描述。"
+
+SAFE_ERROR_MESSAGES.update(
+    {
+        "QUERY_CONCURRENCY_LIMIT": "Query concurrency limit reached.",
+        "USER_QUERY_CONCURRENCY_LIMIT": "User query concurrency limit reached.",
+        "QUERY_ADMISSION_TIMEOUT": "Query admission timed out.",
+        "QUERY_TOTAL_TIMEOUT": "Query total timeout.",
+        "DUPLICATE_REQUEST": "Duplicate request.",
+        "SSE_BACKPRESSURE_TIMEOUT": "Response stream backpressure timeout.",
+        "SSE_STREAM_CLOSED": "Response stream closed.",
+        "SERVICE_SHUTTING_DOWN": "Service is shutting down.",
+    }
+)
 
 
 @dataclass(frozen=True)

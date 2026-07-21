@@ -25,3 +25,14 @@ def test_conversation_id_validation():
     assert QueryRequest(query="hello", conversation_id="abc-123").conversation_id == "abc-123"
     with pytest.raises(ValidationError):
         QueryRequest(query="hello", conversation_id="??")
+
+
+def test_request_and_user_id_validation():
+    request = QueryRequest(query="hello", request_id="rid-1", user_id="user:1")
+
+    assert request.request_id == "rid-1"
+    assert request.user_id == "user:1"
+    with pytest.raises(ValidationError):
+        QueryRequest(query="hello", request_id="bad id with spaces")
+    with pytest.raises(ValidationError):
+        QueryRequest(query="hello", user_id="??")

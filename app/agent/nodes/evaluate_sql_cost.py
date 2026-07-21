@@ -4,6 +4,7 @@ from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
 from app.agent.error_policy import classify_database_error, classify_retryable_error
+from app.agent.nodes._budget import effective_timeout
 from app.agent.nodes._validation_detail import sanitize_validation_detail
 from app.agent.state import DataAgentState
 from app.config.app_config import app_config
@@ -37,9 +38,10 @@ async def evaluate_sql_cost(state: DataAgentState, runtime: Runtime[DataAgentCon
     sql = state.get("normalized_sql") or state.get("sql", "")
     dw_mysql_repository = runtime.context["dw_mysql_repository"]
     try:
+        timeout_seconds = effective_timeout(state, app_config.agent.explain_timeout_seconds)
         explain_json = await asyncio.wait_for(
-            dw_mysql_repository.explain_json(sql, timeout_seconds=app_config.agent.explain_timeout_seconds),
-            timeout=app_config.agent.explain_timeout_seconds,
+            dw_mysql_repository.explain_json(sql, timeout_seconds=timeout_seconds),
+            timeout=timeout_seconds,
         )
         assessment = assess_explain_json(
             explain_json,

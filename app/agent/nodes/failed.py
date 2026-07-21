@@ -33,6 +33,13 @@ async def failed(state: DataAgentState, runtime: Runtime[DataAgentContext]):
             retry_count=retry_count,
             final_status="rejected" if policy.error_code == "SQL_COST_TOO_HIGH" else "failed",
             error_code=policy.error_code,
+            admission_wait_ms=state.get("admission_wait_ms"),
+            global_active_queries=state.get("global_active_queries"),
+            user_active_queries=state.get("user_active_queries"),
+            budget_exhausted=state.get("budget_exhausted"),
+            dropped_sse_events=state.get("dropped_sse_events"),
+            duplicate_request=state.get("duplicate_request"),
+            client_disconnected=state.get("client_disconnected"),
         )
     writer(
         {

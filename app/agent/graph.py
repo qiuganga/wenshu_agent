@@ -9,6 +9,7 @@ from langgraph.graph import StateGraph
 
 from app.agent.context import DataAgentContext
 from app.agent.error_policy import classify_retryable_error
+from app.agent.nodes._budget import require_budget
 from app.agent.nodes.add_extra_context import add_extra_context
 from app.agent.nodes.correct_sql import correct_sql
 from app.agent.nodes.evaluate_sql_cost import evaluate_sql_cost
@@ -30,6 +31,14 @@ from app.agent.nodes.validate_sql import validate_sql
 from app.agent.state import DataAgentState
 
 NodeCallable = Callable[..., Any]
+
+
+def _with_budget_guard(node: NodeCallable) -> NodeCallable:
+    async def guarded(state: DataAgentState, *args: Any, **kwargs: Any) -> Any:
+        require_budget(state)
+        return await node(state, *args, **kwargs)
+
+    return guarded
 
 
 @dataclass(frozen=True)
@@ -114,23 +123,23 @@ def build_agent_graph(nodes: AgentNodes | None = None):
     active_nodes = nodes or default_agent_nodes()
     graph_builder = StateGraph(state_schema=DataAgentState, context_schema=DataAgentContext)
 
-    graph_builder.add_node("extract_keywords", active_nodes.extract_keywords)
-    graph_builder.add_node("recall_column", active_nodes.recall_column)
-    graph_builder.add_node("recall_value", active_nodes.recall_value)
-    graph_builder.add_node("recall_metric", active_nodes.recall_metric)
-    graph_builder.add_node("merge_retrieved_info", active_nodes.merge_retrieved_info)
-    graph_builder.add_node("filter_metric", active_nodes.filter_metric)
-    graph_builder.add_node("filter_table", active_nodes.filter_table)
-    graph_builder.add_node("add_extra_context", active_nodes.add_extra_context)
-    graph_builder.add_node("plan_query", active_nodes.plan_query)
-    graph_builder.add_node("generate_sql", active_nodes.generate_sql)
-    graph_builder.add_node("security_validate_sql", active_nodes.security_validate_sql)
-    graph_builder.add_node("database_validate_sql", active_nodes.database_validate_sql)
-    graph_builder.add_node("evaluate_sql_cost", active_nodes.evaluate_sql_cost)
-    graph_builder.add_node("correct_sql", active_nodes.correct_sql)
-    graph_builder.add_node("execute_sql", active_nodes.execute_sql)
-    graph_builder.add_node("summarize_result", active_nodes.summarize_result)
-    graph_builder.add_node("interpret_result", active_nodes.interpret_result)
+    graph_builder.add_node("extract_keywords", _with_budget_guard(active_nodes.extract_keywords))
+    graph_builder.add_node("recall_column", _with_budget_guard(active_nodes.recall_column))
+    graph_builder.add_node("recall_value", _with_budget_guard(active_nodes.recall_value))
+    graph_builder.add_node("recall_metric", _with_budget_guard(active_nodes.recall_metric))
+    graph_builder.add_node("merge_retrieved_info", _with_budget_guard(active_nodes.merge_retrieved_info))
+    graph_builder.add_node("filter_metric", _with_budget_guard(active_nodes.filter_metric))
+    graph_builder.add_node("filter_table", _with_budget_guard(active_nodes.filter_table))
+    graph_builder.add_node("add_extra_context", _with_budget_guard(active_nodes.add_extra_context))
+    graph_builder.add_node("plan_query", _with_budget_guard(active_nodes.plan_query))
+    graph_builder.add_node("generate_sql", _with_budget_guard(active_nodes.generate_sql))
+    graph_builder.add_node("security_validate_sql", _with_budget_guard(active_nodes.security_validate_sql))
+    graph_builder.add_node("database_validate_sql", _with_budget_guard(active_nodes.database_validate_sql))
+    graph_builder.add_node("evaluate_sql_cost", _with_budget_guard(active_nodes.evaluate_sql_cost))
+    graph_builder.add_node("correct_sql", _with_budget_guard(active_nodes.correct_sql))
+    graph_builder.add_node("execute_sql", _with_budget_guard(active_nodes.execute_sql))
+    graph_builder.add_node("summarize_result", _with_budget_guard(active_nodes.summarize_result))
+    graph_builder.add_node("interpret_result", _with_budget_guard(active_nodes.interpret_result))
     graph_builder.add_node("failed", active_nodes.failed)
 
     graph_builder.add_edge(START, "extract_keywords")

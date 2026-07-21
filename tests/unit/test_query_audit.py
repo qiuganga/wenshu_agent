@@ -26,6 +26,34 @@ def test_query_audit_record_uses_sql_hash_and_safe_fields():
     assert record["final_status"] == "success"
 
 
+def test_query_audit_record_includes_lifecycle_summaries_without_raw_request():
+    record = build_query_audit_record(
+        normalized_sql="",
+        referenced_tables=[],
+        sql_cost={},
+        execution_time_ms=None,
+        result_row_count=None,
+        result_truncated=None,
+        retry_count=0,
+        final_status="duplicate",
+        error_code="DUPLICATE_REQUEST",
+        admission_wait_ms=2,
+        global_active_queries=3,
+        user_active_queries=1,
+        budget_exhausted=False,
+        dropped_sse_events=4,
+        duplicate_request=True,
+        client_disconnected=False,
+    )
+    encoded = json.dumps(record, ensure_ascii=False)
+
+    assert record["admission_wait_ms"] == 2
+    assert record["global_active_queries"] == 3
+    assert record["duplicate_request"] is True
+    assert "select " not in encoded.lower()
+    assert "question" not in encoded.lower()
+
+
 def test_query_audit_failure_does_not_raise(monkeypatch):
     class BrokenLogger:
         def info(self, message):
