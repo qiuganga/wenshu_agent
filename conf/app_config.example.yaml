@@ -63,6 +63,13 @@ agent:
   max_sse_payload_bytes: 262144
   disconnect_poll_interval_seconds: 0.2
   sse_queue_maxsize: 100
+  sse_put_timeout_seconds: 1
+  max_concurrent_queries: 20
+  max_concurrent_queries_per_user: 3
+  admission_timeout_seconds: 2
+  request_dedup_ttl_seconds: 30
+  request_dedup_max_entries: 1000
+  query_total_timeout_seconds: 60
   token_batch_chars: 80
   max_candidate_tables: 10
   max_candidate_metrics: 10

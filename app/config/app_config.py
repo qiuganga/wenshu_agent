@@ -89,6 +89,13 @@ class AgentConfig:
     max_sse_payload_bytes: int = 262144
     disconnect_poll_interval_seconds: float = 0.2
     sse_queue_maxsize: int = 100
+    sse_put_timeout_seconds: float = 1
+    max_concurrent_queries: int = 20
+    max_concurrent_queries_per_user: int = 3
+    admission_timeout_seconds: float = 2
+    request_dedup_ttl_seconds: float = 30
+    request_dedup_max_entries: int = 1000
+    query_total_timeout_seconds: float = 60
     token_batch_chars: int = 80
     max_candidate_tables: int = 10
     max_candidate_metrics: int = 10
@@ -188,6 +195,34 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("agent.disconnect_poll_interval_seconds must be greater than 0")
     if config.agent.sse_queue_maxsize <= 0:
         raise ValueError("agent.sse_queue_maxsize must be greater than 0")
+    if config.agent.sse_put_timeout_seconds <= 0:
+        raise ValueError("agent.sse_put_timeout_seconds must be greater than 0")
+    if config.agent.sse_put_timeout_seconds > 30:
+        raise ValueError("agent.sse_put_timeout_seconds must be <= 30")
+    if config.agent.max_concurrent_queries <= 0:
+        raise ValueError("agent.max_concurrent_queries must be greater than 0")
+    if config.agent.max_concurrent_queries > 10000:
+        raise ValueError("agent.max_concurrent_queries must be <= 10000")
+    if config.agent.max_concurrent_queries_per_user <= 0:
+        raise ValueError("agent.max_concurrent_queries_per_user must be greater than 0")
+    if config.agent.max_concurrent_queries_per_user > config.agent.max_concurrent_queries:
+        raise ValueError("agent.max_concurrent_queries_per_user must be <= agent.max_concurrent_queries")
+    if config.agent.admission_timeout_seconds <= 0:
+        raise ValueError("agent.admission_timeout_seconds must be greater than 0")
+    if config.agent.admission_timeout_seconds > 60:
+        raise ValueError("agent.admission_timeout_seconds must be <= 60")
+    if config.agent.request_dedup_ttl_seconds <= 0:
+        raise ValueError("agent.request_dedup_ttl_seconds must be greater than 0")
+    if config.agent.request_dedup_ttl_seconds > 86400:
+        raise ValueError("agent.request_dedup_ttl_seconds must be <= 86400")
+    if config.agent.request_dedup_max_entries <= 0:
+        raise ValueError("agent.request_dedup_max_entries must be greater than 0")
+    if config.agent.request_dedup_max_entries > 1_000_000:
+        raise ValueError("agent.request_dedup_max_entries must be <= 1000000")
+    if config.agent.query_total_timeout_seconds <= 0:
+        raise ValueError("agent.query_total_timeout_seconds must be greater than 0")
+    if config.agent.query_total_timeout_seconds > 3600:
+        raise ValueError("agent.query_total_timeout_seconds must be <= 3600")
     if config.agent.token_batch_chars <= 0:
         raise ValueError("agent.token_batch_chars must be greater than 0")
     if config.metadata_sync.max_values_per_column <= 0:

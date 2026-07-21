@@ -80,6 +80,14 @@ class DataAgentState(TypedDict, total=False):
     trace: list[dict[str, Any]]
     audit_logged: bool
     started_at: float
+    budget: dict[str, float]
+    budget_exhausted: bool
+    admission_wait_ms: int
+    global_active_queries: int
+    user_active_queries: int
+    dropped_sse_events: int
+    duplicate_request: bool
+    client_disconnected: bool
     visited_nodes: Annotated[list[str], operator.add]
     security_failures: int
     db_failures: int
@@ -123,7 +131,15 @@ def create_initial_state(query: str, max_retries: int | None = None) -> DataAgen
         final_answer="",
         trace=[],
         audit_logged=False,
-        started_at=time.time(),
+        started_at=time.monotonic(),
+        budget={},
+        budget_exhausted=False,
+        admission_wait_ms=0,
+        global_active_queries=0,
+        user_active_queries=0,
+        dropped_sse_events=0,
+        duplicate_request=False,
+        client_disconnected=False,
         visited_nodes=[],
         security_failures=0,
         db_failures=0,

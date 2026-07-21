@@ -5,6 +5,7 @@ from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
 from app.agent.error_policy import classify_database_error, classify_retryable_error
+from app.agent.nodes._budget import effective_timeout
 from app.agent.state import DataAgentState
 from app.config.app_config import app_config
 from app.core.context import request_id_ctx_var
@@ -21,13 +22,14 @@ async def execute_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
     max_rows = min(state.get("max_result_rows", app_config.agent.max_result_rows), app_config.agent.max_result_rows)
     started_at = time.perf_counter()
     try:
+        timeout_seconds = effective_timeout(state, app_config.agent.query_timeout_seconds)
         execution = await asyncio.wait_for(
             dw_mysql_repository.execute_sql(
                 sql,
                 max_rows=max_rows,
-                timeout_seconds=app_config.agent.query_timeout_seconds,
+                timeout_seconds=timeout_seconds,
             ),
-            timeout=app_config.agent.query_timeout_seconds,
+            timeout=timeout_seconds,
         )
         logger.info(
             f"sql executed rows={execution.row_count} truncated={execution.truncated} "
@@ -43,6 +45,13 @@ async def execute_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
             retry_count=state.get("retry_count", 0),
             final_status="success",
             error_code=None,
+            admission_wait_ms=state.get("admission_wait_ms"),
+            global_active_queries=state.get("global_active_queries"),
+            user_active_queries=state.get("user_active_queries"),
+            budget_exhausted=state.get("budget_exhausted"),
+            dropped_sse_events=state.get("dropped_sse_events"),
+            duplicate_request=state.get("duplicate_request"),
+            client_disconnected=state.get("client_disconnected"),
         )
         writer(
             {
@@ -82,6 +91,13 @@ async def execute_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
             retry_count=state.get("retry_count", 0),
             final_status="failed",
             error_code=error_code,
+            admission_wait_ms=state.get("admission_wait_ms"),
+            global_active_queries=state.get("global_active_queries"),
+            user_active_queries=state.get("user_active_queries"),
+            budget_exhausted=state.get("budget_exhausted"),
+            dropped_sse_events=state.get("dropped_sse_events"),
+            duplicate_request=state.get("duplicate_request"),
+            client_disconnected=state.get("client_disconnected"),
         )
         return {
             "execution_time_ms": execution_time_ms,
@@ -110,6 +126,13 @@ async def execute_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
             retry_count=state.get("retry_count", 0),
             final_status="failed",
             error_code=error_code,
+            admission_wait_ms=state.get("admission_wait_ms"),
+            global_active_queries=state.get("global_active_queries"),
+            user_active_queries=state.get("user_active_queries"),
+            budget_exhausted=state.get("budget_exhausted"),
+            dropped_sse_events=state.get("dropped_sse_events"),
+            duplicate_request=state.get("duplicate_request"),
+            client_disconnected=state.get("client_disconnected"),
         )
         return {
             "execution_time_ms": execution_time_ms,

@@ -9,7 +9,18 @@ from pydantic import BaseModel, Field
 
 class AgentEvent(BaseModel):
     request_id: str
-    event: Literal["started", "stage", "sql_generated", "sql_validated", "sql_corrected", "result", "error", "done"]
+    event: Literal[
+        "started",
+        "stage",
+        "sql_generated",
+        "sql_validated",
+        "sql_corrected",
+        "result",
+        "final",
+        "error",
+        "cancelled",
+        "done",
+    ]
     node: str | None = None
     status: str = "ok"
     message: str

@@ -35,6 +35,13 @@ def build_query_audit_record(
     retry_count: int,
     final_status: str,
     error_code: str | None,
+    admission_wait_ms: int | None = None,
+    global_active_queries: int | None = None,
+    user_active_queries: int | None = None,
+    budget_exhausted: bool | None = None,
+    dropped_sse_events: int | None = None,
+    duplicate_request: bool | None = None,
+    client_disconnected: bool | None = None,
 ) -> dict[str, Any]:
     cost = sql_cost or {}
     return {
@@ -49,6 +56,13 @@ def build_query_audit_record(
         "retry_count": retry_count,
         "final_status": final_status,
         "error_code": error_code,
+        "admission_wait_ms": admission_wait_ms,
+        "global_active_queries": global_active_queries,
+        "user_active_queries": user_active_queries,
+        "budget_exhausted": budget_exhausted,
+        "dropped_sse_events": dropped_sse_events,
+        "duplicate_request": duplicate_request,
+        "client_disconnected": client_disconnected,
     }
 
 

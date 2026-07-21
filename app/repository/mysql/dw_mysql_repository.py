@@ -57,14 +57,14 @@ class DWMySQLRepository:
             return
         await self.session.rollback()
 
-    async def _best_effort_statement_timeout(self, timeout_seconds: int) -> None:
+    async def _best_effort_statement_timeout(self, timeout_seconds: float) -> None:
         timeout_ms = max(1, int(timeout_seconds * 1000))
         try:
             await self.session.execute(text(f"SET SESSION MAX_EXECUTION_TIME={timeout_ms}"))
         except Exception as exc:  # pragma: no cover - depends on database flavor and permissions
             logger.warning(f"statement timeout setup skipped reason={type(exc).__name__}")
 
-    async def explain_json(self, sql: str, timeout_seconds: int | None = None) -> str:
+    async def explain_json(self, sql: str, timeout_seconds: float | None = None) -> str:
         effective_timeout = timeout_seconds or app_config.agent.explain_timeout_seconds
         try:
             await self._best_effort_statement_timeout(effective_timeout)
@@ -84,7 +84,7 @@ class DWMySQLRepository:
             if self.session.in_transaction():
                 await self.session.rollback()
 
-    async def _best_effort_readonly_session(self, timeout_seconds: int) -> None:
+    async def _best_effort_readonly_session(self, timeout_seconds: float) -> None:
         timeout_ms = max(1, int(timeout_seconds * 1000))
         for statement in (f"SET SESSION MAX_EXECUTION_TIME={timeout_ms}", "START TRANSACTION READ ONLY"):
             try:
@@ -96,7 +96,7 @@ class DWMySQLRepository:
         self,
         sql: str,
         max_rows: int | None = None,
-        timeout_seconds: int | None = None,
+        timeout_seconds: float | None = None,
     ) -> QueryExecutionResult:
         effective_max_rows = max_rows or app_config.agent.max_result_rows
         effective_timeout = timeout_seconds or app_config.agent.query_timeout_seconds
