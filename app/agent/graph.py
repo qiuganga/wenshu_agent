@@ -6,6 +6,7 @@ from typing import Any
 
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
+from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
 from app.agent.error_policy import classify_retryable_error
@@ -34,9 +35,9 @@ NodeCallable = Callable[..., Any]
 
 
 def _with_budget_guard(node: NodeCallable) -> NodeCallable:
-    async def guarded(state: DataAgentState, *args: Any, **kwargs: Any) -> Any:
+    async def guarded(state: DataAgentState, runtime: Runtime[DataAgentContext]) -> Any:
         require_budget(state)
-        return await node(state, *args, **kwargs)
+        return await node(state, runtime)
 
     return guarded
 

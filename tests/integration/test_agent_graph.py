@@ -11,14 +11,14 @@ def append_node(state: dict, name: str) -> list[str]:
 
 
 def node(name: str, **extra):
-    async def _node(state: dict):
+    async def _node(state: dict, runtime):
         return {"visited_nodes": append_node(state, name), **extra}
 
     return _node
 
 
 def validation_node(name: str, failure_key: str, error_code: str):
-    async def _node(state: dict):
+    async def _node(state: dict, runtime):
         visited = append_node(state, name)
         failures = state.get(failure_key, 0)
         if failures > 0:
@@ -35,7 +35,7 @@ def validation_node(name: str, failure_key: str, error_code: str):
 
 
 def correct_node():
-    async def _node(state: dict):
+    async def _node(state: dict, runtime):
         return {
             "visited_nodes": append_node(state, "correct_sql"),
             "retry_count": state.get("retry_count", 0) + 1,
@@ -48,7 +48,7 @@ def correct_node():
 
 
 def execute_node(cancel: bool = False, fail: bool = False):
-    async def _node(state: dict):
+    async def _node(state: dict, runtime):
         if cancel:
             raise asyncio.CancelledError
         if fail:
@@ -161,6 +161,22 @@ async def test_execute_failure_routes_to_failed_without_summarize_result():
     assert "failed" in state["visited_nodes"]
     assert "summarize_result" not in state["visited_nodes"]
     assert "interpret_result" not in state["visited_nodes"]
+
+
+@pytest.mark.asyncio
+async def test_guarded_nodes_receive_runtime_context():
+    async def runtime_node(state: dict, runtime):
+        return {"visited_nodes": append_node(state, f"extract_keywords:{runtime.context['value']}")}
+
+    nodes = fake_nodes()
+    compiled = build_agent_graph(nodes.__class__(**{**nodes.__dict__, "extract_keywords": runtime_node}))
+
+    state = await compiled.ainvoke(
+        {"retry_count": 0, "max_retries": 2, "visited_nodes": []},
+        context={"value": "available"},
+    )
+
+    assert state["visited_nodes"][0] == "extract_keywords:available"
 
 
 def test_production_graph_imports_and_compiles():
