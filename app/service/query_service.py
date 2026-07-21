@@ -27,6 +27,7 @@ from app.service.query_lifecycle import (
     LifecycleSSEQueue,
     QueryAdmissionController,
     QueryExecutionBudget,
+    QueryLifecycleError,
     RequestDedupRegistry,
 )
 
@@ -189,12 +190,24 @@ class QueryService:
         )
         try:
             while True:
-                budget.remaining_or_raise()
+                remaining_budget = budget.remaining_or_raise()
                 queue_task = asyncio.create_task(stream.queue.get())
                 wait_set = {queue_task}
                 if disconnect_task is not None:
                     wait_set.add(disconnect_task)
-                done, pending = await asyncio.wait(wait_set, return_when=asyncio.FIRST_COMPLETED)
+                done, pending = await asyncio.wait(
+                    wait_set,
+                    timeout=remaining_budget,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done:
+                    queue_task.cancel()
+                    raise QueryLifecycleError(
+                        "QUERY_TOTAL_TIMEOUT",
+                        "Query total timeout",
+                        {"error_code": "QUERY_TOTAL_TIMEOUT", "retryable": False, "budget_exhausted": True},
+                        status_code=504,
+                    )
                 if queue_task in pending:
                     queue_task.cancel()
 
