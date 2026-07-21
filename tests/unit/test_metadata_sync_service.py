@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 
 from app.config.app_config import app_config
@@ -164,6 +166,17 @@ def test_value_id_is_stable_and_scoped_by_field():
     assert first != other_field
 
 
+def test_qdrant_point_id_is_deterministic_uuid_and_scoped_by_kind():
+    first = MetadataSyncService.qdrant_point_id("column", "fact_order.region")
+    second = MetadataSyncService.qdrant_point_id("column", "fact_order.region")
+    metric = MetadataSyncService.qdrant_point_id("metric", "fact_order.region")
+
+    assert first == second
+    assert first != "fact_order.region"
+    assert first != metric
+    assert str(UUID(first)) == first
+
+
 @pytest.mark.asyncio
 async def test_qdrant_ids_are_stable_across_runs():
     dw = FakeDWRepository()
@@ -180,7 +193,8 @@ async def test_qdrant_ids_are_stable_across_runs():
     second_column_ids = column_repo.upsert_calls[1][0]
     first_metric_ids = metric_repo.upsert_calls[0][0]
     second_metric_ids = metric_repo.upsert_calls[1][0]
-    assert first_column_ids == ["fact_order.region"]
+    assert first_column_ids == [MetadataSyncService.qdrant_point_id("column", "fact_order.region")]
+    assert column_repo.upsert_calls[0][2][0]["id"] == "fact_order.region"
     assert first_column_ids == second_column_ids
     assert first_metric_ids == second_metric_ids
 

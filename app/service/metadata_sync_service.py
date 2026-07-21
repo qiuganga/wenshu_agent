@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Literal, Protocol
@@ -133,7 +134,7 @@ class MetadataSyncService:
         ]
         column_embeddings = await self._embed_texts(column_texts)
         await self.column_qdrant_repository.upsert(
-            [payload["id"] for payload in column_payloads],
+            [self.qdrant_point_id("column", payload["id"]) for payload in column_payloads],
             column_embeddings,
             column_payloads,
             batch_size=options.batch_size,
@@ -142,7 +143,7 @@ class MetadataSyncService:
         metric_texts = [self._metric_embedding_text(metric) for metric in meta_config.metrics]
         metric_embeddings = await self._embed_texts(metric_texts)
         await self.metric_qdrant_repository.upsert(
-            [payload["id"] for payload in metric_payloads],
+            [self.qdrant_point_id("metric", payload["id"]) for payload in metric_payloads],
             metric_embeddings,
             metric_payloads,
             batch_size=options.batch_size,
@@ -320,6 +321,11 @@ class MetadataSyncService:
     @staticmethod
     def column_id(table: TableConfig, column: ColumnConfig) -> str:
         return f"{table.name}.{column.name}"
+
+    @staticmethod
+    def qdrant_point_id(kind: str, stable_id: str) -> str:
+        digest = hashlib.sha256(f"{kind}\0{stable_id}".encode()).hexdigest()
+        return str(uuid.UUID(digest[:32]))
 
     def _is_sensitive_column(self, column: ColumnConfig) -> bool:
         return column.name.lower() in self.sensitive_fields

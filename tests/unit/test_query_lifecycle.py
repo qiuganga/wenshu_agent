@@ -149,7 +149,7 @@ async def test_graph_budget_exhaustion_stops_before_next_node():
 
     guarded = _with_budget_guard(node)
     with pytest.raises(QueryLifecycleError):
-        await guarded({"budget": {"deadline": time.monotonic() - 1, "started_at": time.monotonic() - 2}})
+        await guarded({"budget": {"deadline": time.monotonic() - 1, "started_at": time.monotonic() - 2}}, None)
     assert calls == []
 
 
