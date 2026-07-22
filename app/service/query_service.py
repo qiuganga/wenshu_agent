@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -15,10 +16,11 @@ from app.agent.state import DataAgentState, create_initial_state
 from app.api.schemas.query_schema import QueryRequest
 from app.clients.redis_client_manager import redis_client_manager
 from app.config.app_config import app_config
-from app.core.context import request_id_ctx_var
+from app.core.context import execution_id_ctx_var, request_id_ctx_var
 from app.core.events import AgentEvent, elapsed_ms, format_sse
 from app.core.exceptions import AppException, sanitize_exception
 from app.core.query_audit import log_query_audit
+from app.core.telemetry import telemetry_manager
 from app.repository.es.value_es_repository import ValueESRepository
 from app.repository.mysql.dw_mysql_repository import DWMySQLRepository
 from app.repository.mysql.meta_mysql_repository import MetaMySQLRepository
@@ -94,8 +96,15 @@ class QueryService:
     async def _produce_graph_chunks(self, stream: LifecycleSSEQueue, state: DataAgentState) -> None:
         agen = self.agent_graph.astream(input=state, context=self._context(), stream_mode="custom")
         try:
-            async for chunk in agen:
-                await stream.put_graph_event(chunk)
+            with telemetry_manager.span(
+                "graph_execution",
+                {
+                    "execution_id": state.get("execution_id"),
+                    "retry_count": state.get("retry_count", 0),
+                },
+            ):
+                async for chunk in agen:
+                    await stream.put_graph_event(chunk)
             await asyncio.wait_for(stream.queue.put(_DONE), timeout=app_config.agent.sse_put_timeout_seconds)
         except asyncio.CancelledError as exc:
             await stream.put_exception(exc)
@@ -117,6 +126,7 @@ class QueryService:
         fallback_request_key = f"local:{id(query_request)}"
         dedup_request_id = query_request.request_id or (request_id if request_id != "-" else None)
         execution_id = query_request.execution_id or ""
+        execution_id_ctx_var.set(execution_id or "-")
         existing_checkpoint = await checkpoint_manager.load(execution_id)
         is_resume = existing_checkpoint is not None and existing_checkpoint.status == CheckpointStatus.RUNNING
         admission_lease: AdmissionLease | None = None
@@ -126,6 +136,16 @@ class QueryService:
         disconnect_task: asyncio.Task[Any] | None = None
         final_status = "failed"
         client_disconnected = False
+        query_started_at = time.perf_counter()
+        telemetry_manager.increment_counter("query_total")
+        query_span = telemetry_manager.span(
+            "query_execution",
+            {
+                "execution_id": execution_id,
+                "request_id": dedup_request_id or request_id,
+            },
+        )
+        query_span.__enter__()
 
         def emit(
             event: str,
@@ -162,13 +182,16 @@ class QueryService:
                 )
         try:
             if dedup_request_id is not None:
-                dedup_token = await request_dedup_registry.register(dedup_request_id)
+                with telemetry_manager.span("redis.dedup", {"execution_id": execution_id}):
+                    dedup_token = await request_dedup_registry.register(dedup_request_id)
             admission_key = dedup_token.request_id_hash if dedup_token is not None else fallback_request_key
-            admission_lease = await admission_controller.acquire(user_id=user_id, key=admission_key)
+            with telemetry_manager.span("redis.admission", {"execution_id": execution_id}):
+                admission_lease = await admission_controller.acquire(user_id=user_id, key=admission_key)
         except AppException as exc:
             app_exc = sanitize_exception(exc)
             details = app_exc.details if isinstance(app_exc.details, dict) else {}
             final_status = "duplicate" if app_exc.code == "DUPLICATE_REQUEST" else "rejected"
+            telemetry_manager.increment_counter("admission_reject_total", attributes={"error_code": app_exc.code})
             self._audit_terminal(
                 app_exc.code,
                 final_status=final_status,
@@ -187,9 +210,20 @@ class QueryService:
             yield emit("done", "Agent execution finished with error", status="error")
             if dedup_token is not None:
                 await request_dedup_registry.complete(dedup_token, "failed")
+            error_code_for_metrics = (
+                (app_exc.details or {}).get("error_code") if isinstance(app_exc.details, dict) else app_exc.code
+            )
+            telemetry_manager.increment_counter("query_failed_total", attributes={"error_code": error_code_for_metrics})
+            if app_exc.code == "QUERY_TOTAL_TIMEOUT" or error_code_for_metrics == "QUERY_TOTAL_TIMEOUT":
+                telemetry_manager.increment_counter(
+                    "query_timeout_total", attributes={"error_code": "QUERY_TOTAL_TIMEOUT"}
+                )
+            telemetry_manager.record_histogram("query_latency_seconds", time.perf_counter() - query_started_at)
+            query_span.__exit__(None, None, None)
             return
 
         snapshot = admission_controller.snapshot_for(user_id, admission_lease.wait_ms)
+        telemetry_manager.set_active_queries(snapshot.global_active_queries)
         state = create_initial_state(query_request.query)
         state["execution_id"] = execution_id
         state["request_id"] = dedup_request_id or request_id
@@ -242,6 +276,10 @@ class QueryService:
                     with contextlib.suppress(asyncio.CancelledError):
                         await graph_task
                     await request_dedup_registry.complete(dedup_token, "cancelled")
+                    telemetry_manager.increment_counter(
+                        "query_failed_total",
+                        attributes={"error_code": "CLIENT_DISCONNECTED"},
+                    )
                     await checkpoint_manager.mark_cancelled(execution_id, dedup_request_id or request_id, state)
                     final_status = "cancelled"
                     return
@@ -251,6 +289,8 @@ class QueryService:
                     await checkpoint_manager.mark_completed(execution_id, dedup_request_id or request_id, state)
                     yield emit("done", "Agent execution finished")
                     await request_dedup_registry.complete(dedup_token, "completed")
+                    telemetry_manager.increment_counter("query_success_total")
+                    telemetry_manager.record_histogram("query_latency_seconds", time.perf_counter() - query_started_at)
                     final_status = "success"
                     return
                 if isinstance(item, BaseException):
@@ -287,6 +327,17 @@ class QueryService:
                 execution_id, dedup_request_id or request_id, state if "state" in locals() else {}
             )
             details = app_exc.details if isinstance(app_exc.details, dict) else {}
+            error_code_for_metrics = details.get("error_code") or app_exc.code
+            telemetry_manager.increment_counter(
+                "query_failed_total",
+                attributes={"error_code": error_code_for_metrics},
+            )
+            if error_code_for_metrics == "QUERY_TOTAL_TIMEOUT":
+                telemetry_manager.increment_counter(
+                    "query_timeout_total",
+                    attributes={"error_code": "QUERY_TOTAL_TIMEOUT"},
+                )
+            telemetry_manager.record_histogram("query_latency_seconds", time.perf_counter() - query_started_at)
             self._audit_terminal(
                 details.get("error_code") or app_exc.code,
                 final_status=final_status,
@@ -311,6 +362,8 @@ class QueryService:
                 with contextlib.suppress(asyncio.CancelledError):
                     await disconnect_task
             await admission_controller.release(admission_lease)
+            telemetry_manager.set_active_queries(0)
+            query_span.__exit__(None, None, None)
 
     def _audit_terminal(
         self,

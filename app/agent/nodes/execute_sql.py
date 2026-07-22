@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import time
 
 from langgraph.runtime import Runtime
@@ -11,6 +12,7 @@ from app.config.app_config import app_config
 from app.core.context import request_id_ctx_var
 from app.core.logging import logger
 from app.core.query_audit import log_query_audit
+from app.core.telemetry import telemetry_manager
 
 
 async def execute_sql(state: DataAgentState, runtime: Runtime[DataAgentContext]):
@@ -23,14 +25,23 @@ async def execute_sql(state: DataAgentState, runtime: Runtime[DataAgentContext])
     started_at = time.perf_counter()
     try:
         timeout_seconds = effective_timeout(state, app_config.agent.query_timeout_seconds)
-        execution = await asyncio.wait_for(
-            dw_mysql_repository.execute_sql(
-                sql,
-                max_rows=max_rows,
-                timeout_seconds=timeout_seconds,
-            ),
-            timeout=timeout_seconds,
-        )
+        with telemetry_manager.span(
+            "sql_execution",
+            {
+                "sql_hash": hashlib.sha256(sql.encode("utf-8")).hexdigest(),
+                "table_names": state.get("sql_referenced_tables", []),
+                "retry_count": state.get("retry_count", 0),
+            },
+        ):
+            execution = await asyncio.wait_for(
+                dw_mysql_repository.execute_sql(
+                    sql,
+                    max_rows=max_rows,
+                    timeout_seconds=timeout_seconds,
+                ),
+                timeout=timeout_seconds,
+            )
+        telemetry_manager.record_histogram("sql_execution_seconds", execution.execution_time_ms / 1000)
         logger.info(
             f"sql executed rows={execution.row_count} truncated={execution.truncated} "
             f"tables={state.get('sql_referenced_tables', [])} sql_length={len(sql)}"

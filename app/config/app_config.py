@@ -76,6 +76,13 @@ class RedisConfig:
 
 
 @dataclass
+class TelemetryConfig:
+    enabled: bool = True
+    service_name: str = "wenshu-agent"
+    exporter: str = "console"
+
+
+@dataclass
 class LLMConfig:
     model_name: str = "deepseek-ai/DeepSeek-V3"
     api_key: str = ""
@@ -147,6 +154,7 @@ class AppConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     es: ESConfig = field(default_factory=ESConfig)
     redis: RedisConfig = field(default_factory=RedisConfig)
+    telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
@@ -253,3 +261,7 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("redis.socket_timeout_seconds must be greater than 0")
     if not config.redis.key_prefix.strip():
         raise ValueError("redis.key_prefix must not be empty")
+    if not config.telemetry.service_name.strip():
+        raise ValueError("telemetry.service_name must not be empty")
+    if config.telemetry.exporter not in {"console", "none"}:
+        raise ValueError("telemetry.exporter must be console or none")

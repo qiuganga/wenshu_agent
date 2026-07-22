@@ -32,6 +32,7 @@ from app.agent.nodes.security_validate_sql import security_validate_sql
 from app.agent.nodes.summarize_result import summarize_result
 from app.agent.nodes.validate_sql import validate_sql
 from app.agent.state import DataAgentState
+from app.core.telemetry import telemetry_manager
 
 NodeCallable = Callable[..., Any]
 
@@ -47,7 +48,15 @@ def _with_budget_guard(node: NodeCallable, node_name: str = "", next_node: str |
         if node_name and execution_id:
             await checkpoint_manager.mark_node_running(execution_id, request_id, node_name, state)
         try:
-            update = await node(state, runtime)
+            with telemetry_manager.span(
+                f"node.{node_name}" if node_name else "node",
+                {
+                    "node_name": node_name,
+                    "execution_id": execution_id,
+                    "retry_count": retry_count,
+                },
+            ):
+                update = await node(state, runtime)
         except asyncio.CancelledError:
             if node_name and execution_id:
                 await checkpoint_manager.mark_cancelled(execution_id, request_id, state)

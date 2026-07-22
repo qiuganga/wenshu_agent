@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from typing import Any
 
 import yaml
@@ -13,6 +14,7 @@ from app.agent.state import DataAgentState
 from app.config.app_config import app_config
 from app.core.context import request_id_ctx_var
 from app.core.logging import logger
+from app.core.telemetry import telemetry_manager
 from app.prompt.prompt_loader import load_prompt
 from app.security.data_masking import mask_rows
 
@@ -142,11 +144,14 @@ async def interpret_result(state: DataAgentState, runtime: Runtime[DataAgentCont
 
     fallback_used = False
     try:
-        async for token in _stream_llm_interpretation(state, summary):
-            chunks.append(token)
-            token_buffer.append(token)
-            if sum(len(part) for part in token_buffer) >= app_config.agent.token_batch_chars:
-                flush_token_buffer()
+        llm_started_at = time.perf_counter()
+        with telemetry_manager.span("llm.interpret_result", {"node_name": "interpret_result"}):
+            async for token in _stream_llm_interpretation(state, summary):
+                chunks.append(token)
+                token_buffer.append(token)
+                if sum(len(part) for part in token_buffer) >= app_config.agent.token_batch_chars:
+                    flush_token_buffer()
+        telemetry_manager.record_histogram("llm_latency_seconds", time.perf_counter() - llm_started_at)
         flush_token_buffer()
         interpretation = "".join(chunks)
         if not interpretation.strip():
