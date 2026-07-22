@@ -111,6 +111,10 @@ class TelemetryManager:
         self._metrics: list[CapturedMetric] = []
         self.capture_for_tests = False
         self.query_total = _NoopInstrument()
+        self.startup_total = _NoopInstrument()
+        self.shutdown_total = _NoopInstrument()
+        self.graceful_shutdown_total = _NoopInstrument()
+        self.forced_shutdown_total = _NoopInstrument()
         self.query_success_total = _NoopInstrument()
         self.query_failed_total = _NoopInstrument()
         self.query_timeout_total = _NoopInstrument()
@@ -127,6 +131,8 @@ class TelemetryManager:
         self.cache_lease_contention_total = _NoopInstrument()
         self.semantic_cache_rejected_total = _NoopInstrument()
         self.query_latency_seconds = _NoopInstrument()
+        self.startup_time_seconds = _NoopInstrument()
+        self.shutdown_time_seconds = _NoopInstrument()
         self.sql_execution_seconds = _NoopInstrument()
         self.llm_latency_seconds = _NoopInstrument()
         self.cache_lookup_latency_seconds = _NoopInstrument()
@@ -136,6 +142,8 @@ class TelemetryManager:
         self.semantic_similarity_score = _NoopInstrument()
         self._active_queries = 0
         self._cache_lease_active = 0
+        self._active_connections = 0
+        self._active_graph_tasks = 0
 
     def init(self) -> None:
         self.enabled = bool(app_config.telemetry.enabled)
@@ -168,6 +176,10 @@ class TelemetryManager:
         if self._meter is None:
             return
         self.query_total = self._meter.create_counter("query_total")
+        self.startup_total = self._meter.create_counter("startup_total")
+        self.shutdown_total = self._meter.create_counter("shutdown_total")
+        self.graceful_shutdown_total = self._meter.create_counter("graceful_shutdown_total")
+        self.forced_shutdown_total = self._meter.create_counter("forced_shutdown_total")
         self.query_success_total = self._meter.create_counter("query_success_total")
         self.query_failed_total = self._meter.create_counter("query_failed_total")
         self.query_timeout_total = self._meter.create_counter("query_timeout_total")
@@ -184,6 +196,8 @@ class TelemetryManager:
         self.cache_lease_contention_total = self._meter.create_counter("cache_lease_contention_total")
         self.semantic_cache_rejected_total = self._meter.create_counter("semantic_cache_rejected_total")
         self.query_latency_seconds = self._meter.create_histogram("query_latency_seconds")
+        self.startup_time_seconds = self._meter.create_histogram("startup_time_seconds")
+        self.shutdown_time_seconds = self._meter.create_histogram("shutdown_time_seconds")
         self.sql_execution_seconds = self._meter.create_histogram("sql_execution_seconds")
         self.llm_latency_seconds = self._meter.create_histogram("llm_latency_seconds")
         self.cache_lookup_latency_seconds = self._meter.create_histogram("cache_lookup_latency_seconds")
@@ -280,6 +294,16 @@ class TelemetryManager:
         self._cache_lease_active = max(0, value)
         if self.capture_for_tests:
             self._metrics.append(CapturedMetric("cache_lease_active", self._cache_lease_active, {}))
+
+    def set_active_connections(self, value: int) -> None:
+        self._active_connections = max(0, value)
+        if self.capture_for_tests:
+            self._metrics.append(CapturedMetric("active_connections", self._active_connections, {}))
+
+    def set_active_graph_tasks(self, value: int) -> None:
+        self._active_graph_tasks = max(0, value)
+        if self.capture_for_tests:
+            self._metrics.append(CapturedMetric("active_graph_tasks", self._active_graph_tasks, {}))
 
     def enable_test_capture(self) -> None:
         self.capture_for_tests = True
