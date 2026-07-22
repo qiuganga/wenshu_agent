@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -8,6 +9,7 @@ from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 from langgraph.runtime import Runtime
 
+from app.agent.checkpoint import checkpoint_manager
 from app.agent.context import DataAgentContext
 from app.agent.error_policy import classify_retryable_error
 from app.agent.nodes._budget import require_budget
@@ -34,10 +36,38 @@ from app.agent.state import DataAgentState
 NodeCallable = Callable[..., Any]
 
 
-def _with_budget_guard(node: NodeCallable) -> NodeCallable:
+def _with_budget_guard(node: NodeCallable, node_name: str = "", next_node: str | None = None) -> NodeCallable:
     async def guarded(state: DataAgentState, runtime: Runtime[DataAgentContext]) -> Any:
         require_budget(state)
-        return await node(state, runtime)
+        execution_id = state.get("execution_id")
+        request_id = state.get("request_id") or execution_id or ""
+        retry_count = int(state.get("retry_count") or 0)
+        if node_name and await checkpoint_manager.node_completed(execution_id, node_name, retry_count):
+            return {}
+        if node_name and execution_id:
+            await checkpoint_manager.mark_node_running(execution_id, request_id, node_name, state)
+        try:
+            update = await node(state, runtime)
+        except asyncio.CancelledError:
+            if node_name and execution_id:
+                await checkpoint_manager.mark_cancelled(execution_id, request_id, state)
+            raise
+        except Exception:
+            if node_name and execution_id:
+                await checkpoint_manager.mark_failed(execution_id, request_id, state)
+            raise
+        if node_name and execution_id and isinstance(update, dict):
+            merged_state = dict(state)
+            merged_state.update(update)
+            await checkpoint_manager.mark_node_completed(
+                execution_id,
+                request_id,
+                node_name,
+                next_node,
+                merged_state,
+                update,
+            )
+        return update
 
     return guarded
 
@@ -124,23 +154,71 @@ def build_agent_graph(nodes: AgentNodes | None = None):
     active_nodes = nodes or default_agent_nodes()
     graph_builder = StateGraph(state_schema=DataAgentState, context_schema=DataAgentContext)
 
-    graph_builder.add_node("extract_keywords", _with_budget_guard(active_nodes.extract_keywords))
-    graph_builder.add_node("recall_column", _with_budget_guard(active_nodes.recall_column))
-    graph_builder.add_node("recall_value", _with_budget_guard(active_nodes.recall_value))
-    graph_builder.add_node("recall_metric", _with_budget_guard(active_nodes.recall_metric))
-    graph_builder.add_node("merge_retrieved_info", _with_budget_guard(active_nodes.merge_retrieved_info))
-    graph_builder.add_node("filter_metric", _with_budget_guard(active_nodes.filter_metric))
-    graph_builder.add_node("filter_table", _with_budget_guard(active_nodes.filter_table))
-    graph_builder.add_node("add_extra_context", _with_budget_guard(active_nodes.add_extra_context))
-    graph_builder.add_node("plan_query", _with_budget_guard(active_nodes.plan_query))
-    graph_builder.add_node("generate_sql", _with_budget_guard(active_nodes.generate_sql))
-    graph_builder.add_node("security_validate_sql", _with_budget_guard(active_nodes.security_validate_sql))
-    graph_builder.add_node("database_validate_sql", _with_budget_guard(active_nodes.database_validate_sql))
-    graph_builder.add_node("evaluate_sql_cost", _with_budget_guard(active_nodes.evaluate_sql_cost))
-    graph_builder.add_node("correct_sql", _with_budget_guard(active_nodes.correct_sql))
-    graph_builder.add_node("execute_sql", _with_budget_guard(active_nodes.execute_sql))
-    graph_builder.add_node("summarize_result", _with_budget_guard(active_nodes.summarize_result))
-    graph_builder.add_node("interpret_result", _with_budget_guard(active_nodes.interpret_result))
+    graph_builder.add_node(
+        "extract_keywords",
+        _with_budget_guard(active_nodes.extract_keywords, "extract_keywords", "recall_column"),
+    )
+    graph_builder.add_node(
+        "recall_column",
+        _with_budget_guard(active_nodes.recall_column, "recall_column", "merge_retrieved_info"),
+    )
+    graph_builder.add_node(
+        "recall_value",
+        _with_budget_guard(active_nodes.recall_value, "recall_value", "merge_retrieved_info"),
+    )
+    graph_builder.add_node(
+        "recall_metric",
+        _with_budget_guard(active_nodes.recall_metric, "recall_metric", "merge_retrieved_info"),
+    )
+    graph_builder.add_node(
+        "merge_retrieved_info",
+        _with_budget_guard(active_nodes.merge_retrieved_info, "merge_retrieved_info", "filter_table"),
+    )
+    graph_builder.add_node(
+        "filter_metric",
+        _with_budget_guard(active_nodes.filter_metric, "filter_metric", "add_extra_context"),
+    )
+    graph_builder.add_node(
+        "filter_table",
+        _with_budget_guard(active_nodes.filter_table, "filter_table", "add_extra_context"),
+    )
+    graph_builder.add_node(
+        "add_extra_context",
+        _with_budget_guard(active_nodes.add_extra_context, "add_extra_context", "plan_query"),
+    )
+    graph_builder.add_node("plan_query", _with_budget_guard(active_nodes.plan_query, "plan_query", "generate_sql"))
+    graph_builder.add_node(
+        "generate_sql",
+        _with_budget_guard(active_nodes.generate_sql, "generate_sql", "security_validate_sql"),
+    )
+    graph_builder.add_node(
+        "security_validate_sql",
+        _with_budget_guard(active_nodes.security_validate_sql, "security_validate_sql", "database_validate_sql"),
+    )
+    graph_builder.add_node(
+        "database_validate_sql",
+        _with_budget_guard(active_nodes.database_validate_sql, "database_validate_sql", "evaluate_sql_cost"),
+    )
+    graph_builder.add_node(
+        "evaluate_sql_cost",
+        _with_budget_guard(active_nodes.evaluate_sql_cost, "evaluate_sql_cost", "execute_sql"),
+    )
+    graph_builder.add_node(
+        "correct_sql",
+        _with_budget_guard(active_nodes.correct_sql, "correct_sql", "security_validate_sql"),
+    )
+    graph_builder.add_node(
+        "execute_sql",
+        _with_budget_guard(active_nodes.execute_sql, "execute_sql", "summarize_result"),
+    )
+    graph_builder.add_node(
+        "summarize_result",
+        _with_budget_guard(active_nodes.summarize_result, "summarize_result", "interpret_result"),
+    )
+    graph_builder.add_node(
+        "interpret_result",
+        _with_budget_guard(active_nodes.interpret_result, "interpret_result", "__end__"),
+    )
     graph_builder.add_node("failed", active_nodes.failed)
 
     graph_builder.add_edge(START, "extract_keywords")

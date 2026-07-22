@@ -85,6 +85,8 @@ class DataAgentState(TypedDict, total=False):
     admission_wait_ms: int
     global_active_queries: int
     user_active_queries: int
+    execution_id: str
+    request_id: str
     dropped_sse_events: int
     duplicate_request: bool
     client_disconnected: bool
@@ -137,6 +139,8 @@ def create_initial_state(query: str, max_retries: int | None = None) -> DataAgen
         admission_wait_ms=0,
         global_active_queries=0,
         user_active_queries=0,
+        execution_id="",
+        request_id="",
         dropped_sse_events=0,
         duplicate_request=False,
         client_disconnected=False,
