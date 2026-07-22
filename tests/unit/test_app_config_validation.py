@@ -29,6 +29,10 @@ def test_new_agent_cost_config_defaults_are_backward_compatible():
     assert config.agent.request_dedup_max_entries == 1000
     assert config.agent.query_total_timeout_seconds == 60
     assert config.agent.sse_put_timeout_seconds == 1
+    assert config.redis.host == "localhost"
+    assert config.redis.port == 6379
+    assert config.redis.db == 0
+    assert config.redis.key_prefix == "wenshu-agent"
 
 
 @pytest.mark.parametrize(
@@ -71,6 +75,24 @@ def test_full_scan_fact_limit_must_not_exceed_join_limit():
 
     with pytest.raises(ValueError, match="agent.max_full_scan_fact_tables must be <= agent.max_join_tables"):
         validate_runtime_config(copy.deepcopy(config))
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("port", 0, "redis.port must be between 1 and 65535"),
+        ("port", 65536, "redis.port must be between 1 and 65535"),
+        ("db", -1, "redis.db must be >= 0"),
+        ("socket_timeout_seconds", 0, "redis.socket_timeout_seconds must be greater than 0"),
+        ("key_prefix", " ", "redis.key_prefix must not be empty"),
+    ],
+)
+def test_redis_config_validation(field, value, message):
+    config = valid_config()
+    setattr(config.redis, field, value)
+
+    with pytest.raises(ValueError, match=message):
+        validate_runtime_config(config)
 
 
 def test_unknown_full_scan_limit_must_not_exceed_estimated_rows_limit():

@@ -7,6 +7,7 @@ from app.clients.embedding_client_manager import embedding_client_manager
 from app.clients.es_client_manager import es_client_manager
 from app.clients.mysql_client_manager import dw_mysql_client_manager, meta_mysql_client_manager
 from app.clients.qdrant_client_manager import qdrant_client_manager
+from app.clients.redis_client_manager import redis_client_manager
 from app.config.app_config import validate_runtime_config
 from app.service.query_service import admission_controller, request_dedup_registry
 
@@ -15,6 +16,7 @@ from app.service.query_service import admission_controller, request_dedup_regist
 async def lifespan(app: FastAPI):
     if os.getenv("APP_SKIP_RUNTIME_CONFIG_VALIDATION") != "1":
         validate_runtime_config()
+    redis_client_manager.init()
     await admission_controller.reset()
     await request_dedup_registry.clear()
     embedding_client_manager.init()
@@ -27,6 +29,7 @@ async def lifespan(app: FastAPI):
     await request_dedup_registry.clear()
     await qdrant_client_manager.close()
     await es_client_manager.close()
+    await redis_client_manager.close()
     await meta_mysql_client_manager.close()
     await dw_mysql_client_manager.close()
     await admission_controller.reset()

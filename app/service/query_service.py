@@ -12,6 +12,7 @@ from app.agent.context import DataAgentContext
 from app.agent.graph import graph
 from app.agent.state import DataAgentState, create_initial_state
 from app.api.schemas.query_schema import QueryRequest
+from app.clients.redis_client_manager import redis_client_manager
 from app.config.app_config import app_config
 from app.core.context import request_id_ctx_var
 from app.core.events import AgentEvent, elapsed_ms, format_sse
@@ -25,22 +26,27 @@ from app.repository.qdrant.metric_qdrant_repository import MetricQdrantRepositor
 from app.service.query_lifecycle import (
     AdmissionLease,
     LifecycleSSEQueue,
-    QueryAdmissionController,
     QueryExecutionBudget,
     QueryLifecycleError,
-    RequestDedupRegistry,
+    RedisQueryAdmissionController,
+    RedisRequestDedupRegistry,
 )
 
 _DONE = object()
 
-admission_controller = QueryAdmissionController(
+admission_controller = RedisQueryAdmissionController(
     max_global=app_config.agent.max_concurrent_queries,
     max_per_user=app_config.agent.max_concurrent_queries_per_user,
     timeout_seconds=app_config.agent.admission_timeout_seconds,
+    redis_client=lambda: redis_client_manager.client,
+    key_prefix=app_config.redis.key_prefix,
+    lease_ttl_seconds=app_config.agent.query_total_timeout_seconds + app_config.agent.admission_timeout_seconds,
 )
-request_dedup_registry = RequestDedupRegistry(
+request_dedup_registry = RedisRequestDedupRegistry(
     ttl_seconds=app_config.agent.request_dedup_ttl_seconds,
     max_entries=app_config.agent.request_dedup_max_entries,
+    redis_client=lambda: redis_client_manager.client,
+    key_prefix=app_config.redis.key_prefix,
 )
 
 
