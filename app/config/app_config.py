@@ -147,6 +147,24 @@ class CostConfig:
 
 
 @dataclass
+class CacheConfig:
+    enabled: bool = True
+    exact_enabled: bool = True
+    semantic_enabled: bool = True
+    exact_ttl_seconds: int = 300
+    semantic_ttl_seconds: int = 900
+    semantic_similarity_threshold: float = 0.92
+    semantic_top_k: int = 5
+    max_entry_bytes: int = 65536
+    lease_ttl_seconds: int = 30
+    lease_wait_timeout_seconds: float = 5
+    namespace_version: str = "v1"
+    data_version: str = "v1"
+    semantic_collection_name: str = "wenshu_agent_semantic_cache"
+    cache_safe_final_summary: bool = False
+
+
+@dataclass
 class SecurityConfig:
     sensitive_fields: list[str] = field(default_factory=lambda: sorted(DEFAULT_SENSITIVE_FIELDS))
 
@@ -172,6 +190,7 @@ class AppConfig:
     agent: AgentConfig = field(default_factory=AgentConfig)
     prompt: PromptConfig = field(default_factory=PromptConfig)
     cost: CostConfig = field(default_factory=CostConfig)
+    cache: CacheConfig = field(default_factory=CacheConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     metadata_sync: MetadataSyncConfig = field(default_factory=MetadataSyncConfig)
 
@@ -284,3 +303,29 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("telemetry.exporter must be console or none")
     if not config.prompt.default_version.strip():
         raise ValueError("prompt.default_version must not be empty")
+    if config.cache.exact_ttl_seconds <= 0:
+        raise ValueError("cache.exact_ttl_seconds must be greater than 0")
+    if config.cache.semantic_ttl_seconds <= 0:
+        raise ValueError("cache.semantic_ttl_seconds must be greater than 0")
+    if not 0 < config.cache.semantic_similarity_threshold <= 1:
+        raise ValueError("cache.semantic_similarity_threshold must be between 0 and 1")
+    if config.cache.semantic_top_k <= 0:
+        raise ValueError("cache.semantic_top_k must be greater than 0")
+    if config.cache.semantic_top_k > 100:
+        raise ValueError("cache.semantic_top_k must be <= 100")
+    if config.cache.max_entry_bytes < 1024:
+        raise ValueError("cache.max_entry_bytes must be >= 1024")
+    if config.cache.max_entry_bytes > 1_048_576:
+        raise ValueError("cache.max_entry_bytes must be <= 1048576")
+    if config.cache.lease_ttl_seconds <= 0:
+        raise ValueError("cache.lease_ttl_seconds must be greater than 0")
+    if config.cache.lease_wait_timeout_seconds <= 0:
+        raise ValueError("cache.lease_wait_timeout_seconds must be greater than 0")
+    if config.cache.lease_wait_timeout_seconds >= config.cache.lease_ttl_seconds:
+        raise ValueError("cache.lease_wait_timeout_seconds must be less than cache.lease_ttl_seconds")
+    if not config.cache.namespace_version.strip():
+        raise ValueError("cache.namespace_version must not be empty")
+    if not config.cache.data_version.strip():
+        raise ValueError("cache.data_version must not be empty")
+    if not config.cache.semantic_collection_name.strip():
+        raise ValueError("cache.semantic_collection_name must not be empty")

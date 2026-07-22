@@ -14,6 +14,8 @@ from app.agent.context import DataAgentContext
 from app.agent.graph import graph
 from app.agent.state import DataAgentState, create_initial_state
 from app.api.schemas.query_schema import QueryRequest
+from app.cache.models import CacheIdentity
+from app.cache.service import QueryCacheService, query_cache_service
 from app.clients.redis_client_manager import redis_client_manager
 from app.config.app_config import app_config
 from app.core.context import execution_id_ctx_var, request_id_ctx_var
@@ -74,6 +76,7 @@ class QueryService:
         meta_mysql_repository: MetaMySQLRepository,
         dw_mysql_repository: DWMySQLRepository,
         agent_graph: Any | None = None,
+        cache_service: QueryCacheService | None = None,
     ):
         self.embedding_client = embedding_client
         self.column_qdrant_repository = column_qdrant_repository
@@ -82,6 +85,7 @@ class QueryService:
         self.meta_mysql_repository = meta_mysql_repository
         self.dw_mysql_repository = dw_mysql_repository
         self.agent_graph: Any = agent_graph or graph
+        self.cache_service = cache_service or query_cache_service
 
     def _context(self) -> DataAgentContext:
         return DataAgentContext(
@@ -134,6 +138,9 @@ class QueryService:
         stream: LifecycleSSEQueue | None = None
         graph_task: asyncio.Task[Any] | None = None
         disconnect_task: asyncio.Task[Any] | None = None
+        cache_identity: CacheIdentity | None = None
+        cache_lease_owner: str | None = None
+        cache_final_payload: dict[str, Any] | None = None
         final_status = "failed"
         client_disconnected = False
         query_started_at = time.perf_counter()
@@ -224,6 +231,49 @@ class QueryService:
 
         snapshot = admission_controller.snapshot_for(user_id, admission_lease.wait_ms)
         telemetry_manager.set_active_queries(snapshot.global_active_queries)
+        cache_identity = self.cache_service.build_identity(query=query_request.query, user_id=user_id)
+        cache_lookup = await self.cache_service.lookup(cache_identity)
+        if cache_lookup.result.hit and cache_lookup.payload is not None:
+            yield emit("result", "Cache hit", cache_lookup.payload, node="cache")
+            yield emit("done", "Agent execution finished")
+            await request_dedup_registry.complete(dedup_token, "completed")
+            telemetry_manager.increment_counter("query_success_total")
+            telemetry_manager.record_histogram("query_latency_seconds", time.perf_counter() - query_started_at)
+            self._audit_terminal(
+                None,
+                final_status="success",
+                retry_count=0,
+                admission_wait_ms=snapshot.admission_wait_ms,
+                global_active_queries=snapshot.global_active_queries,
+                user_active_queries=snapshot.user_active_queries,
+                cache_hit=True,
+                cache_type=cache_lookup.result.cache_type,
+            )
+            final_status = "success"
+            return
+
+        cache_lease_owner = await self.cache_service.acquire_lease(cache_identity)
+        if cache_lease_owner is None:
+            filled_lookup = await self.cache_service.wait_for_fill(cache_identity)
+            if filled_lookup is not None and filled_lookup.result.hit and filled_lookup.payload is not None:
+                yield emit("result", "Cache hit", filled_lookup.payload, node="cache")
+                yield emit("done", "Agent execution finished")
+                await request_dedup_registry.complete(dedup_token, "completed")
+                telemetry_manager.increment_counter("query_success_total")
+                telemetry_manager.record_histogram("query_latency_seconds", time.perf_counter() - query_started_at)
+                self._audit_terminal(
+                    None,
+                    final_status="success",
+                    retry_count=0,
+                    admission_wait_ms=snapshot.admission_wait_ms,
+                    global_active_queries=snapshot.global_active_queries,
+                    user_active_queries=snapshot.user_active_queries,
+                    cache_hit=True,
+                    cache_type=filled_lookup.result.cache_type,
+                )
+                final_status = "success"
+                return
+
         state = create_initial_state(query_request.query)
         state["execution_id"] = execution_id
         state["request_id"] = dedup_request_id or request_id
@@ -287,6 +337,18 @@ class QueryService:
                 item = await queue_task
                 if item is _DONE:
                     await checkpoint_manager.mark_completed(execution_id, dedup_request_id or request_id, state)
+                    if cache_identity is not None and cache_final_payload is not None:
+                        await self.cache_service.write(
+                            identity=cache_identity,
+                            payload=cache_final_payload,
+                            final_status="success",
+                            metadata={
+                                "read_only": True,
+                                "data_version": cache_identity.scope.data_version,
+                                "checkpoint_resumed": is_resume,
+                                "fallback_used": False,
+                            },
+                        )
                     yield emit("done", "Agent execution finished")
                     await request_dedup_registry.complete(dedup_token, "completed")
                     telemetry_manager.increment_counter("query_success_total")
@@ -301,6 +363,8 @@ class QueryService:
                 node = chunk.get("node")
                 message = chunk.get("message") or chunk.get("stage") or event
                 safe_data = {k: v for k, v in chunk.items() if k not in {"event", "node", "message"}}
+                if event == "result" and "final_answer" in safe_data:
+                    cache_final_payload = dict(safe_data)
                 yield emit(event, message, safe_data or None, node=node)
         except asyncio.CancelledError:
             if stream is not None:
@@ -361,6 +425,8 @@ class QueryService:
             if disconnect_task is not None:
                 with contextlib.suppress(asyncio.CancelledError):
                     await disconnect_task
+            if cache_identity is not None:
+                await self.cache_service.release_lease(cache_identity, cache_lease_owner)
             await admission_controller.release(admission_lease)
             telemetry_manager.set_active_queries(0)
             query_span.__exit__(None, None, None)
@@ -378,6 +444,8 @@ class QueryService:
         dropped_sse_events: int | None = None,
         duplicate_request: bool | None = None,
         client_disconnected: bool | None = None,
+        cache_hit: bool | None = None,
+        cache_type: str | None = None,
     ) -> None:
         log_query_audit(
             normalized_sql="",
@@ -396,4 +464,6 @@ class QueryService:
             dropped_sse_events=dropped_sse_events,
             duplicate_request=duplicate_request,
             client_disconnected=client_disconnected,
+            cache_hit=cache_hit,
+            cache_type=cache_type,
         )

@@ -36,6 +36,18 @@ def test_new_agent_cost_config_defaults_are_backward_compatible():
     assert config.telemetry.enabled is True
     assert config.telemetry.service_name == "wenshu-agent"
     assert config.telemetry.exporter == "console"
+    assert config.cache.enabled is True
+    assert config.cache.exact_enabled is True
+    assert config.cache.semantic_enabled is True
+    assert config.cache.exact_ttl_seconds == 300
+    assert config.cache.semantic_ttl_seconds == 900
+    assert config.cache.semantic_similarity_threshold == 0.92
+    assert config.cache.semantic_top_k == 5
+    assert config.cache.max_entry_bytes == 65536
+    assert config.cache.lease_ttl_seconds == 30
+    assert config.cache.lease_wait_timeout_seconds == 5
+    assert config.cache.namespace_version == "v1"
+    assert config.cache.data_version == "v1"
 
 
 @pytest.mark.parametrize(
@@ -130,4 +142,38 @@ def test_telemetry_config_validation():
     config.telemetry.exporter = "otlp"
 
     with pytest.raises(ValueError, match="telemetry.exporter must be console or none"):
+        validate_runtime_config(config)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("exact_ttl_seconds", 0, "cache.exact_ttl_seconds must be greater than 0"),
+        ("semantic_ttl_seconds", 0, "cache.semantic_ttl_seconds must be greater than 0"),
+        ("semantic_similarity_threshold", 0, "cache.semantic_similarity_threshold must be between 0 and 1"),
+        ("semantic_similarity_threshold", 1.1, "cache.semantic_similarity_threshold must be between 0 and 1"),
+        ("semantic_top_k", 0, "cache.semantic_top_k must be greater than 0"),
+        ("semantic_top_k", 101, "cache.semantic_top_k must be <= 100"),
+        ("max_entry_bytes", 1023, "cache.max_entry_bytes must be >= 1024"),
+        ("max_entry_bytes", 1_048_577, "cache.max_entry_bytes must be <= 1048576"),
+        ("lease_ttl_seconds", 0, "cache.lease_ttl_seconds must be greater than 0"),
+        ("lease_wait_timeout_seconds", 0, "cache.lease_wait_timeout_seconds must be greater than 0"),
+        ("namespace_version", " ", "cache.namespace_version must not be empty"),
+        ("data_version", " ", "cache.data_version must not be empty"),
+        ("semantic_collection_name", " ", "cache.semantic_collection_name must not be empty"),
+    ],
+)
+def test_cache_config_validation(field, value, message):
+    config = valid_config()
+    setattr(config.cache, field, value)
+
+    with pytest.raises(ValueError, match=message):
+        validate_runtime_config(config)
+
+
+def test_cache_lease_wait_must_be_less_than_ttl():
+    config = valid_config()
+    config.cache.lease_wait_timeout_seconds = 30
+
+    with pytest.raises(ValueError, match="cache.lease_wait_timeout_seconds must be less than cache.lease_ttl_seconds"):
         validate_runtime_config(config)
