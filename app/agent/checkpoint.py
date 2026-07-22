@@ -10,6 +10,7 @@ from typing import Any
 
 from app.clients.redis_client_manager import redis_client_manager
 from app.config.app_config import app_config
+from app.core.telemetry import telemetry_manager
 
 
 class CheckpointStatus(StrEnum):
@@ -187,7 +188,8 @@ class CheckpointManager:
         client = self._client()
         if client is None:
             return None
-        raw = await client.get(self.key_for(execution_id))
+        with telemetry_manager.span("redis.checkpoint", {"execution_id": execution_id}):
+            raw = await client.get(self.key_for(execution_id))
         if not raw:
             return None
         try:
@@ -202,6 +204,7 @@ class CheckpointManager:
         record = await self.load(execution_id)
         if record is None or record.status != CheckpointStatus.RUNNING:
             return dict(state)
+        telemetry_manager.increment_counter("checkpoint_recovery_total", attributes={"execution_id": execution_id})
         resumed = dict(state)
         resumed.update(record.state_snapshot)
         resumed["execution_id"] = record.execution_id
@@ -343,7 +346,8 @@ class CheckpointManager:
             audit_emitted=audit_emitted if audit_emitted is not None else bool(existing and existing.audit_emitted),
         )
         payload = json.dumps(record.to_dict(), ensure_ascii=False, sort_keys=True)
-        result = await client.eval(CHECKPOINT_SAVE_LUA, 1, self.key_for(execution_id), payload, self.ttl_seconds)
+        with telemetry_manager.span("redis.checkpoint", {"execution_id": execution_id}):
+            result = await client.eval(CHECKPOINT_SAVE_LUA, 1, self.key_for(execution_id), payload, self.ttl_seconds)
         if str(result) != "ok":
             raise CheckpointTransitionError(f"invalid checkpoint transition for {execution_id}")
 

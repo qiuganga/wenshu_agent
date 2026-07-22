@@ -50,6 +50,11 @@ redis:
   key_prefix: wenshu-agent
   socket_timeout_seconds: 2
 
+telemetry:
+  enabled: true
+  service_name: wenshu-agent
+  exporter: console
+
 llm:
   model_name: deepseek-ai/DeepSeek-V3
   api_key: your_siliconflow_api_key_here

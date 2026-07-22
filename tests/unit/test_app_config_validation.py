@@ -33,6 +33,9 @@ def test_new_agent_cost_config_defaults_are_backward_compatible():
     assert config.redis.port == 6379
     assert config.redis.db == 0
     assert config.redis.key_prefix == "wenshu-agent"
+    assert config.telemetry.enabled is True
+    assert config.telemetry.service_name == "wenshu-agent"
+    assert config.telemetry.exporter == "console"
 
 
 @pytest.mark.parametrize(
@@ -114,3 +117,17 @@ def test_user_concurrency_limit_must_not_exceed_global_limit():
         match="agent.max_concurrent_queries_per_user must be <= agent.max_concurrent_queries",
     ):
         validate_runtime_config(copy.deepcopy(config))
+
+
+def test_telemetry_config_validation():
+    config = valid_config()
+    config.telemetry.service_name = " "
+
+    with pytest.raises(ValueError, match="telemetry.service_name must not be empty"):
+        validate_runtime_config(config)
+
+    config = valid_config()
+    config.telemetry.exporter = "otlp"
+
+    with pytest.raises(ValueError, match="telemetry.exporter must be console or none"):
+        validate_runtime_config(config)

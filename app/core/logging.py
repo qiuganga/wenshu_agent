@@ -5,7 +5,7 @@ from pathlib import Path
 from loguru import logger
 
 from app.config.app_config import app_config
-from app.core.context import request_id_ctx_var
+from app.core.context import execution_id_ctx_var, request_id_ctx_var, trace_id_ctx_var
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -14,6 +14,8 @@ log_format = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
     "<level>{level: <8}</level> | "
     "<magenta>request_id - {extra[request_id]}</magenta> | "
+    "<magenta>trace_id - {extra[trace_id]}</magenta> | "
+    "<magenta>execution_id - {extra[execution_id]}</magenta> | "
     "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
     "<level>{message}</level>"
 )
@@ -25,6 +27,8 @@ def inject_request_id(record):
     except Exception:
         request_id = str(uuid.uuid4())
     record["extra"]["request_id"] = request_id
+    record["extra"]["trace_id"] = trace_id_ctx_var.get()
+    record["extra"]["execution_id"] = execution_id_ctx_var.get()
 
 
 logger.remove()
