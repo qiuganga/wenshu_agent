@@ -130,6 +130,71 @@ prompt:
 cost:
   enabled: true
 
+governance:
+  enabled: true
+  policy_version: v1
+
+budget:
+  enabled: true
+  request_max_total_tokens: 16000
+  request_max_cost_minor_units: 100
+  request_max_llm_calls: 8
+  request_max_agent_steps: 20
+  request_max_handoffs: 5
+  reservation_ttl_seconds: 900
+  strict_unknown_pricing: true
+
+quota:
+  enabled: true
+  requests_per_minute: 60
+  concurrent_requests: 5
+  tokens_per_day: 200000
+  cost_per_day_minor_units: 10000
+
+routing:
+  adaptive_enabled: true
+  model_health_ttl_seconds: 60
+
+slo:
+  enabled: true
+  availability_target: 0.995
+  query_latency_p95_seconds: 15
+  first_token_latency_p95_seconds: 3
+  routing_latency_p95_seconds: 0.2
+  evaluation_window_seconds: 3600
+
+error_budget:
+  warning_ratio: 0.25
+  exhausted_ratio: 0.0
+  recovery_ratio: 0.4
+
+load_shedding:
+  enabled: true
+  active_query_threshold: 100
+  queue_depth_threshold: 200
+  retry_after_seconds: 5
+
+capacity:
+  enabled: true
+  target_utilization: 0.7
+  min_replicas: 2
+  max_replicas: 10
+  cooldown_seconds: 60
+
+pricing:
+  version: example-v1
+  currency: USD
+  models:
+    - provider: example
+      model_name: example-model
+      pricing_version: example-v1
+      effective_from: "2026-01-01T00:00:00+00:00"
+      input_price_per_million_tokens: "0.00"
+      output_price_per_million_tokens: "0.00"
+      currency: USD
+      source: example-placeholder
+      enabled: false
+
 cache:
   enabled: true
   exact_enabled: true

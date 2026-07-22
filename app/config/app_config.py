@@ -161,6 +161,93 @@ class CostConfig:
 
 
 @dataclass
+class GovernanceConfig:
+    enabled: bool = True
+    policy_version: str = "v1"
+
+
+@dataclass
+class BudgetConfig:
+    enabled: bool = True
+    request_max_total_tokens: int = 16000
+    request_max_cost_minor_units: int = 100
+    request_max_llm_calls: int = 8
+    request_max_agent_steps: int = 20
+    request_max_handoffs: int = 5
+    reservation_ttl_seconds: int = 900
+    strict_unknown_pricing: bool = True
+
+
+@dataclass
+class QuotaConfig:
+    enabled: bool = True
+    requests_per_minute: int = 60
+    concurrent_requests: int = 5
+    tokens_per_day: int = 200000
+    cost_per_day_minor_units: int = 10000
+
+
+@dataclass
+class RoutingConfig:
+    adaptive_enabled: bool = True
+    model_health_ttl_seconds: int = 60
+
+
+@dataclass
+class SLOConfig:
+    enabled: bool = True
+    availability_target: float = 0.995
+    query_latency_p95_seconds: float = 15
+    first_token_latency_p95_seconds: float = 3
+    routing_latency_p95_seconds: float = 0.2
+    evaluation_window_seconds: int = 3600
+
+
+@dataclass
+class ErrorBudgetConfig:
+    warning_ratio: float = 0.25
+    exhausted_ratio: float = 0.0
+    recovery_ratio: float = 0.4
+
+
+@dataclass
+class LoadSheddingConfig:
+    enabled: bool = True
+    active_query_threshold: int = 100
+    queue_depth_threshold: int = 200
+    retry_after_seconds: int = 5
+
+
+@dataclass
+class CapacityConfig:
+    enabled: bool = True
+    target_utilization: float = 0.7
+    min_replicas: int = 2
+    max_replicas: int = 10
+    cooldown_seconds: int = 60
+
+
+@dataclass
+class PricingModelConfig:
+    provider: str = "example"
+    model_name: str = "example-model"
+    pricing_version: str = "example-v1"
+    effective_from: str = "2026-01-01T00:00:00+00:00"
+    input_price_per_million_tokens: str = "0.00"
+    output_price_per_million_tokens: str = "0.00"
+    currency: str = "USD"
+    source: str = "example-placeholder"
+    enabled: bool = False
+
+
+@dataclass
+class PricingConfig:
+    version: str = "example-v1"
+    currency: str = "USD"
+    models: list[PricingModelConfig] = field(default_factory=list)
+
+
+@dataclass
 class CacheConfig:
     enabled: bool = True
     exact_enabled: bool = True
@@ -230,6 +317,15 @@ class AppConfig:
     agent: AgentConfig = field(default_factory=AgentConfig)
     prompt: PromptConfig = field(default_factory=PromptConfig)
     cost: CostConfig = field(default_factory=CostConfig)
+    governance: GovernanceConfig = field(default_factory=GovernanceConfig)
+    budget: BudgetConfig = field(default_factory=BudgetConfig)
+    quota: QuotaConfig = field(default_factory=QuotaConfig)
+    routing: RoutingConfig = field(default_factory=RoutingConfig)
+    slo: SLOConfig = field(default_factory=SLOConfig)
+    error_budget: ErrorBudgetConfig = field(default_factory=ErrorBudgetConfig)
+    load_shedding: LoadSheddingConfig = field(default_factory=LoadSheddingConfig)
+    capacity: CapacityConfig = field(default_factory=CapacityConfig)
+    pricing: PricingConfig = field(default_factory=PricingConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     authorization: AuthorizationConfig = field(default_factory=AuthorizationConfig)
@@ -346,6 +442,62 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("telemetry.exporter must be console or none")
     if not config.prompt.default_version.strip():
         raise ValueError("prompt.default_version must not be empty")
+    if not config.governance.policy_version.strip():
+        raise ValueError("governance.policy_version must not be empty")
+    if config.budget.request_max_total_tokens <= 0:
+        raise ValueError("budget.request_max_total_tokens must be greater than 0")
+    if config.budget.request_max_cost_minor_units < 0:
+        raise ValueError("budget.request_max_cost_minor_units must be >= 0")
+    if config.budget.request_max_llm_calls <= 0:
+        raise ValueError("budget.request_max_llm_calls must be greater than 0")
+    if config.budget.request_max_agent_steps <= 0:
+        raise ValueError("budget.request_max_agent_steps must be greater than 0")
+    if config.budget.request_max_handoffs < 0:
+        raise ValueError("budget.request_max_handoffs must be >= 0")
+    if config.budget.reservation_ttl_seconds <= 0:
+        raise ValueError("budget.reservation_ttl_seconds must be greater than 0")
+    if config.quota.requests_per_minute <= 0:
+        raise ValueError("quota.requests_per_minute must be greater than 0")
+    if config.quota.concurrent_requests <= 0:
+        raise ValueError("quota.concurrent_requests must be greater than 0")
+    if config.quota.tokens_per_day <= 0:
+        raise ValueError("quota.tokens_per_day must be greater than 0")
+    if config.quota.cost_per_day_minor_units < 0:
+        raise ValueError("quota.cost_per_day_minor_units must be >= 0")
+    if config.routing.model_health_ttl_seconds <= 0:
+        raise ValueError("routing.model_health_ttl_seconds must be greater than 0")
+    if not 0 < config.slo.availability_target <= 1:
+        raise ValueError("slo.availability_target must be between 0 and 1")
+    if config.slo.query_latency_p95_seconds <= 0:
+        raise ValueError("slo.query_latency_p95_seconds must be greater than 0")
+    if config.slo.first_token_latency_p95_seconds <= 0:
+        raise ValueError("slo.first_token_latency_p95_seconds must be greater than 0")
+    if config.slo.routing_latency_p95_seconds <= 0:
+        raise ValueError("slo.routing_latency_p95_seconds must be greater than 0")
+    if config.slo.evaluation_window_seconds <= 0:
+        raise ValueError("slo.evaluation_window_seconds must be greater than 0")
+    if not 0 <= config.error_budget.exhausted_ratio <= config.error_budget.warning_ratio <= 1:
+        raise ValueError("error_budget ratios must satisfy 0 <= exhausted <= warning <= 1")
+    if config.error_budget.recovery_ratio <= config.error_budget.exhausted_ratio:
+        raise ValueError("error_budget.recovery_ratio must be greater than exhausted_ratio")
+    if config.error_budget.recovery_ratio > 1:
+        raise ValueError("error_budget.recovery_ratio must be <= 1")
+    if config.load_shedding.active_query_threshold <= 0:
+        raise ValueError("load_shedding.active_query_threshold must be greater than 0")
+    if config.load_shedding.queue_depth_threshold <= 0:
+        raise ValueError("load_shedding.queue_depth_threshold must be greater than 0")
+    if config.load_shedding.retry_after_seconds <= 0:
+        raise ValueError("load_shedding.retry_after_seconds must be greater than 0")
+    if not 0 < config.capacity.target_utilization <= 1:
+        raise ValueError("capacity.target_utilization must be between 0 and 1")
+    if config.capacity.min_replicas <= 0:
+        raise ValueError("capacity.min_replicas must be greater than 0")
+    if config.capacity.max_replicas < config.capacity.min_replicas:
+        raise ValueError("capacity.max_replicas must be >= capacity.min_replicas")
+    if config.capacity.cooldown_seconds <= 0:
+        raise ValueError("capacity.cooldown_seconds must be greater than 0")
+    if config.pricing.currency and len(config.pricing.currency) != 3:
+        raise ValueError("pricing.currency must be a three-letter currency code")
     if config.cache.exact_ttl_seconds <= 0:
         raise ValueError("cache.exact_ttl_seconds must be greater than 0")
     if config.cache.semantic_ttl_seconds <= 0:

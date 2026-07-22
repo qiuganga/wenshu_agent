@@ -23,6 +23,7 @@ from app.core.events import AgentEvent, elapsed_ms, format_sse
 from app.core.exceptions import AppException, sanitize_exception
 from app.core.query_audit import log_query_audit
 from app.core.telemetry import telemetry_manager
+from app.governance.runtime import governance_runtime
 from app.repository.es.value_es_repository import ValueESRepository
 from app.repository.mysql.dw_mysql_repository import DWMySQLRepository
 from app.repository.mysql.meta_mysql_repository import MetaMySQLRepository
@@ -141,6 +142,14 @@ class QueryService:
             request_id=dedup_request_id or request_id,
             trace_id=trace_id_ctx_var.get(),
         )
+        governance_budget = governance_runtime.build_budget_context(
+            request_id=dedup_request_id or request_id,
+            execution_id=execution_id,
+            user_id=user_id,
+            tenant_id=query_request.tenant_id,
+        )
+        with telemetry_manager.span("governance.complexity.classify", {"execution_id": execution_id}):
+            complexity = governance_runtime.classify(query_request.query)
         execution_id_ctx_var.set(execution_id or "-")
         existing_checkpoint = await checkpoint_manager.load(execution_id)
         is_resume = existing_checkpoint is not None and existing_checkpoint.status == CheckpointStatus.RUNNING
@@ -337,6 +346,14 @@ class QueryService:
         state["execution_id"] = execution_id
         state["request_id"] = dedup_request_id or request_id
         state["security_context"] = security_context.to_safe_dict()
+        state["governance_context"] = governance_budget.safe_snapshot()
+        state["complexity"] = {
+            "complexity_level": complexity.complexity_level.value,
+            "reason_codes": complexity.reason_codes,
+            "estimated_llm_calls": complexity.estimated_llm_calls,
+            "estimated_agent_steps": complexity.estimated_agent_steps,
+            "estimated_token_range": list(complexity.estimated_token_range),
+        }
         state["prompt_risk_level"] = "LOW"
         state["budget"] = budget.summary()
         state["admission_wait_ms"] = snapshot.admission_wait_ms
