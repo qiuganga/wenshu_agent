@@ -106,6 +106,7 @@ class AgentConfig:
     request_dedup_ttl_seconds: float = 30
     request_dedup_max_entries: int = 1000
     query_total_timeout_seconds: float = 60
+    checkpoint_ttl_seconds: int = 3600
     token_batch_chars: int = 80
     max_candidate_tables: int = 10
     max_candidate_metrics: int = 10
@@ -234,6 +235,10 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("agent.query_total_timeout_seconds must be greater than 0")
     if config.agent.query_total_timeout_seconds > 3600:
         raise ValueError("agent.query_total_timeout_seconds must be <= 3600")
+    if config.agent.checkpoint_ttl_seconds <= 0:
+        raise ValueError("agent.checkpoint_ttl_seconds must be greater than 0")
+    if config.agent.checkpoint_ttl_seconds > 86400:
+        raise ValueError("agent.checkpoint_ttl_seconds must be <= 86400")
     if config.agent.token_batch_chars <= 0:
         raise ValueError("agent.token_batch_chars must be greater than 0")
     if config.metadata_sync.max_values_per_column <= 0:

@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import Request
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 
+from app.agent.checkpoint import CheckpointStatus, checkpoint_manager
 from app.agent.context import DataAgentContext
 from app.agent.graph import graph
 from app.agent.state import DataAgentState, create_initial_state
@@ -115,6 +116,9 @@ class QueryService:
         user_id = query_request.user_id or query_request.conversation_id or "anonymous"
         fallback_request_key = f"local:{id(query_request)}"
         dedup_request_id = query_request.request_id or (request_id if request_id != "-" else None)
+        execution_id = query_request.execution_id or ""
+        existing_checkpoint = await checkpoint_manager.load(execution_id)
+        is_resume = existing_checkpoint is not None and existing_checkpoint.status == CheckpointStatus.RUNNING
         admission_lease: AdmissionLease | None = None
         dedup_token = None
         stream: LifecycleSSEQueue | None = None
@@ -144,7 +148,18 @@ class QueryService:
             sequence += 1
             return format_sse(payload)
 
-        yield emit("started", "Agent execution started", {"query_length": len(query_request.query)})
+        if not is_resume:
+            yield emit("started", "Agent execution started", {"query_length": len(query_request.query)})
+            if execution_id:
+                await checkpoint_manager.mark_started_emitted(
+                    execution_id,
+                    dedup_request_id or request_id,
+                    {
+                        "query": query_request.query,
+                        "execution_id": execution_id,
+                        "request_id": dedup_request_id or request_id,
+                    },
+                )
         try:
             if dedup_request_id is not None:
                 dedup_token = await request_dedup_registry.register(dedup_request_id)
@@ -176,12 +191,15 @@ class QueryService:
 
         snapshot = admission_controller.snapshot_for(user_id, admission_lease.wait_ms)
         state = create_initial_state(query_request.query)
+        state["execution_id"] = execution_id
+        state["request_id"] = dedup_request_id or request_id
         state["budget"] = budget.summary()
         state["admission_wait_ms"] = snapshot.admission_wait_ms
         state["global_active_queries"] = snapshot.global_active_queries
         state["user_active_queries"] = snapshot.user_active_queries
         if query_request.max_rows is not None:
             state["max_result_rows"] = min(query_request.max_rows, app_config.agent.max_result_rows)
+        state = await checkpoint_manager.resume_state(state, execution_id)  # type: ignore[assignment]
 
         stream = LifecycleSSEQueue(
             maxsize=app_config.agent.sse_queue_maxsize,
@@ -224,11 +242,13 @@ class QueryService:
                     with contextlib.suppress(asyncio.CancelledError):
                         await graph_task
                     await request_dedup_registry.complete(dedup_token, "cancelled")
+                    await checkpoint_manager.mark_cancelled(execution_id, dedup_request_id or request_id, state)
                     final_status = "cancelled"
                     return
 
                 item = await queue_task
                 if item is _DONE:
+                    await checkpoint_manager.mark_completed(execution_id, dedup_request_id or request_id, state)
                     yield emit("done", "Agent execution finished")
                     await request_dedup_registry.complete(dedup_token, "completed")
                     final_status = "success"
@@ -248,6 +268,8 @@ class QueryService:
             if graph_task is not None:
                 graph_task.cancel()
             await request_dedup_registry.complete(dedup_token, "cancelled")
+            checkpoint_state = state if "state" in locals() else {}
+            await checkpoint_manager.mark_cancelled(execution_id, dedup_request_id or request_id, checkpoint_state)
             raise
         except Exception as exc:
             app_exc = sanitize_exception(exc)
@@ -261,6 +283,9 @@ class QueryService:
                 )
             yield emit("done", "Agent execution finished with error", status="error")
             await request_dedup_registry.complete(dedup_token, "failed")
+            await checkpoint_manager.mark_failed(
+                execution_id, dedup_request_id or request_id, state if "state" in locals() else {}
+            )
             details = app_exc.details if isinstance(app_exc.details, dict) else {}
             self._audit_terminal(
                 details.get("error_code") or app_exc.code,

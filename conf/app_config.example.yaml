@@ -78,6 +78,7 @@ agent:
   request_dedup_ttl_seconds: 30
   request_dedup_max_entries: 1000
   query_total_timeout_seconds: 60
+  checkpoint_ttl_seconds: 3600
   token_batch_chars: 80
   max_candidate_tables: 10
   max_candidate_metrics: 10
