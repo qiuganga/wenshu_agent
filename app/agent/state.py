@@ -81,6 +81,8 @@ class DataAgentState(TypedDict, total=False):
     audit_logged: bool
     started_at: float
     budget: dict[str, float]
+    governance_context: dict[str, Any]
+    complexity: dict[str, Any]
     budget_exhausted: bool
     admission_wait_ms: int
     global_active_queries: int
@@ -141,6 +143,8 @@ def create_initial_state(query: str, max_retries: int | None = None) -> DataAgen
         audit_logged=False,
         started_at=time.monotonic(),
         budget={},
+        governance_context={},
+        complexity={},
         budget_exhausted=False,
         admission_wait_ms=0,
         global_active_queries=0,

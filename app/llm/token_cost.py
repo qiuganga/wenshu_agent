@@ -34,6 +34,7 @@ class CostEstimate:
     output_tokens: int
     total_tokens: int
     estimated_cost: float
+    usage_source: str = "estimated"
 
 
 class CostTracker:
@@ -49,4 +50,5 @@ class CostTracker:
             output_tokens=usage.output_tokens,
             total_tokens=usage.total_tokens,
             estimated_cost=(usage.total_tokens / 1000) * rate,
+            usage_source="estimated",
         )

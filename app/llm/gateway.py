@@ -212,7 +212,23 @@ class LLMGateway:
                 "output_tokens": usage.output_tokens,
                 "fallback_used": route.fallback_used,
                 "latency_ms": latency_ms,
+                "usage_source": cost.usage_source,
             },
+        )
+        telemetry_manager.record_histogram(
+            "request_input_tokens",
+            usage.input_tokens,
+            attributes={"model_name": route.model_name, "usage_source": cost.usage_source},
+        )
+        telemetry_manager.record_histogram(
+            "request_output_tokens",
+            usage.output_tokens,
+            attributes={"model_name": route.model_name, "usage_source": cost.usage_source},
+        )
+        telemetry_manager.record_histogram(
+            "request_cost",
+            cost.estimated_cost,
+            attributes={"model_name": route.model_name, "usage_source": cost.usage_source},
         )
 
     @staticmethod

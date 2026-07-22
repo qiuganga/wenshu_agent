@@ -70,8 +70,19 @@ SAFE_ATTRIBUTE_KEYS = {
     "user_hash",
     "capability",
     "agent_name",
+    "budget_status",
+    "complexity_level",
+    "cost_bucket",
+    "error_budget_status",
+    "load_shed_reason",
+    "pricing_version",
+    "quota_type",
     "receiver",
+    "route_reason",
     "sender",
+    "slo_name",
+    "slo_status",
+    "usage_source",
 }
 SENSITIVE_KEY_PARTS = (
     "api_key",
@@ -150,6 +161,14 @@ class TelemetryManager:
         self.agent_route_total = _NoopInstrument()
         self.handoff_total = _NoopInstrument()
         self.agent_failure_total = _NoopInstrument()
+        self.budget_rejected_total = _NoopInstrument()
+        self.quota_rejected_total = _NoopInstrument()
+        self.load_shed_total = _NoopInstrument()
+        self.model_route_total = _NoopInstrument()
+        self.model_fallback_total = _NoopInstrument()
+        self.cost_settlement_pending_total = _NoopInstrument()
+        self.slo_violation_total = _NoopInstrument()
+        self.error_budget_exhausted_total = _NoopInstrument()
         self.query_latency_seconds = _NoopInstrument()
         self.evaluation_score = _NoopInstrument()
         self.startup_time_seconds = _NoopInstrument()
@@ -161,10 +180,20 @@ class TelemetryManager:
         self.semantic_search_latency_seconds = _NoopInstrument()
         self.cache_entry_age_seconds = _NoopInstrument()
         self.semantic_similarity_score = _NoopInstrument()
+        self.request_cost = _NoopInstrument()
+        self.request_input_tokens = _NoopInstrument()
+        self.request_output_tokens = _NoopInstrument()
+        self.model_routing_latency_seconds = _NoopInstrument()
+        self.budget_check_latency_seconds = _NoopInstrument()
+        self.quota_check_latency_seconds = _NoopInstrument()
         self._active_queries = 0
         self._cache_lease_active = 0
         self._active_connections = 0
         self._active_graph_tasks = 0
+        self._error_budget_remaining_ratio = 1.0
+        self._admission_utilization = 0.0
+        self._capacity_saturation_ratio = 0.0
+        self._pending_cost_settlements = 0
 
     def init(self) -> None:
         self.enabled = bool(app_config.telemetry.enabled)
@@ -221,6 +250,14 @@ class TelemetryManager:
         self.agent_route_total = self._meter.create_counter("agent_route_total")
         self.handoff_total = self._meter.create_counter("handoff_total")
         self.agent_failure_total = self._meter.create_counter("agent_failure_total")
+        self.budget_rejected_total = self._meter.create_counter("budget_rejected_total")
+        self.quota_rejected_total = self._meter.create_counter("quota_rejected_total")
+        self.load_shed_total = self._meter.create_counter("load_shed_total")
+        self.model_route_total = self._meter.create_counter("model_route_total")
+        self.model_fallback_total = self._meter.create_counter("model_fallback_total")
+        self.cost_settlement_pending_total = self._meter.create_counter("cost_settlement_pending_total")
+        self.slo_violation_total = self._meter.create_counter("slo_violation_total")
+        self.error_budget_exhausted_total = self._meter.create_counter("error_budget_exhausted_total")
         self.query_latency_seconds = self._meter.create_histogram("query_latency_seconds")
         self.evaluation_score = self._meter.create_histogram("evaluation_score")
         self.startup_time_seconds = self._meter.create_histogram("startup_time_seconds")
@@ -232,6 +269,12 @@ class TelemetryManager:
         self.semantic_search_latency_seconds = self._meter.create_histogram("semantic_search_latency_seconds")
         self.cache_entry_age_seconds = self._meter.create_histogram("cache_entry_age_seconds")
         self.semantic_similarity_score = self._meter.create_histogram("semantic_similarity_score")
+        self.request_cost = self._meter.create_histogram("request_cost")
+        self.request_input_tokens = self._meter.create_histogram("request_input_tokens")
+        self.request_output_tokens = self._meter.create_histogram("request_output_tokens")
+        self.model_routing_latency_seconds = self._meter.create_histogram("model_routing_latency_seconds")
+        self.budget_check_latency_seconds = self._meter.create_histogram("budget_check_latency_seconds")
+        self.quota_check_latency_seconds = self._meter.create_histogram("quota_check_latency_seconds")
 
     def new_trace_id(self) -> str:
         return uuid.uuid4().hex
@@ -331,6 +374,26 @@ class TelemetryManager:
         self._active_graph_tasks = max(0, value)
         if self.capture_for_tests:
             self._metrics.append(CapturedMetric("active_graph_tasks", self._active_graph_tasks, {}))
+
+    def set_error_budget_remaining_ratio(self, value: float) -> None:
+        self._error_budget_remaining_ratio = max(0.0, min(1.0, value))
+        if self.capture_for_tests:
+            self._metrics.append(CapturedMetric("error_budget_remaining_ratio", self._error_budget_remaining_ratio, {}))
+
+    def set_admission_utilization(self, value: float) -> None:
+        self._admission_utilization = max(0.0, value)
+        if self.capture_for_tests:
+            self._metrics.append(CapturedMetric("admission_utilization", self._admission_utilization, {}))
+
+    def set_capacity_saturation_ratio(self, value: float) -> None:
+        self._capacity_saturation_ratio = max(0.0, value)
+        if self.capture_for_tests:
+            self._metrics.append(CapturedMetric("capacity_saturation_ratio", self._capacity_saturation_ratio, {}))
+
+    def set_pending_cost_settlements(self, value: int) -> None:
+        self._pending_cost_settlements = max(0, value)
+        if self.capture_for_tests:
+            self._metrics.append(CapturedMetric("pending_cost_settlements", self._pending_cost_settlements, {}))
 
     def enable_test_capture(self) -> None:
         self.capture_for_tests = True
