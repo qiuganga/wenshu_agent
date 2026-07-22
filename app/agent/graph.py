@@ -32,6 +32,7 @@ from app.agent.nodes.security_validate_sql import security_validate_sql
 from app.agent.nodes.summarize_result import summarize_result
 from app.agent.nodes.validate_sql import validate_sql
 from app.agent.state import DataAgentState
+from app.agents.orchestrator import supervisor_node
 from app.core.telemetry import telemetry_manager
 
 NodeCallable = Callable[..., Any]
@@ -270,6 +271,10 @@ def build_agent_graph(nodes: AgentNodes | None = None):
     graph_builder.add_edge("interpret_result", END)
     graph_builder.add_edge("failed", END)
     return graph_builder.compile()
+
+
+def build_multi_agent_supervisor_node() -> NodeCallable:
+    return supervisor_node
 
 
 graph = build_agent_graph()
