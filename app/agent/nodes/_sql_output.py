@@ -13,6 +13,7 @@ from sqlglot.errors import ParseError
 from app.config.app_config import app_config
 from app.core.exceptions import SQLValidationError
 from app.core.logging import logger
+from app.llm.gateway import llm_gateway
 from app.security.sql_security import SQLGenerationResult
 
 SQL_OUTPUT_PARSER = PydanticOutputParser(pydantic_object=SQLGenerationResult)
@@ -77,6 +78,32 @@ def _error_code(exc: Exception) -> str:
     if isinstance(details, dict) and isinstance(details.get("code"), str):
         return details["code"]
     return getattr(exc, "code", "LLM_SQL_PARSE_FAILED")
+
+
+async def invoke_sql_gateway(prompt_name: str, payload: dict[str, Any], dialect: str = "mysql") -> str:
+    attempts = app_config.agent.llm_output_parse_retries + 1
+    last_error: Exception | None = None
+    current_payload = dict(payload)
+    for _attempt in range(1, attempts + 1):
+        previous_output = ""
+        try:
+            result = await llm_gateway.ainvoke_structured(
+                prompt_name, current_payload, SQLGenerationResult, SQL_OUTPUT_PARSER
+            )
+            return validate_generated_sql(result, dialect=dialect)
+        except SQLValidationError as exc:
+            last_error = exc
+            code = _error_code(exc)
+            current_payload = {
+                **payload,
+                "previous_output": previous_output,
+                "parse_error": code,
+                "correction_instruction": 'Return only JSON matching the required schema: {"sql": "..."}.',
+            }
+    raise SQLValidationError(
+        "LLM SQL output retries exceeded",
+        {"code": "LLM_SQL_RETRIES_EXCEEDED", "last_error": _error_code(last_error) if last_error else None},
+    )
 
 
 async def _invoke_structured(llm: Any, payload: dict[str, Any]) -> SQLGenerationResult | None:

@@ -1,27 +1,13 @@
 from typing import Any
 
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
-
-from app.config.app_config import app_config
+from app.llm.gateway import llm_gateway
+from app.llm.model_router import MissingLLM, model_router
 
 
-class MissingLLM:
-    def __getattr__(self, name: str) -> Any:
-        raise RuntimeError("llm.api_key is not configured; configure conf/app_config.yaml before calling the LLM")
+def create_llm() -> Any:
+    return model_router.create_client(model_router.route().model_name)
 
 
-def create_llm() -> ChatOpenAI | MissingLLM:
-    if not app_config.llm.api_key.strip():
-        return MissingLLM()
-    return ChatOpenAI(
-        model=app_config.llm.model_name,
-        api_key=SecretStr(app_config.llm.api_key),
-        base_url=app_config.llm.base_url,
-        temperature=app_config.llm.temperature,
-        timeout=app_config.llm.timeout_seconds,
-        max_retries=app_config.llm.max_retries,
-    )
+llm: Any = llm_gateway
 
-
-llm: Any = create_llm()
+__all__ = ["MissingLLM", "create_llm", "llm"]

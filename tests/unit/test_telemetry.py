@@ -55,6 +55,30 @@ def test_sql_like_attribute_value_is_redacted_unless_sql_hash():
     assert attrs["sql_hash"] == "select-not-sql"
 
 
+def test_llm_token_attributes_are_allowed_without_prompt_or_response():
+    manager = TelemetryManager()
+
+    attrs = manager.safe_attributes(
+        {
+            "model_name": "model-a",
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "total_tokens": 15,
+            "estimated_cost": 0.01,
+            "prompt": "select * from users",
+            "response": "ok",
+        }
+    )
+
+    assert attrs["model_name"] == "model-a"
+    assert attrs["input_tokens"] == 10
+    assert attrs["output_tokens"] == 5
+    assert attrs["total_tokens"] == 15
+    assert attrs["estimated_cost"] == 0.01
+    assert "prompt" not in attrs
+    assert "response" not in attrs
+
+
 def test_metrics_capture_uses_safe_attributes():
     telemetry_manager.enable_test_capture()
 

@@ -10,12 +10,12 @@ from app.agent.nodes.correct_sql import correct_sql
 async def test_correct_sql_prompt_receives_internal_context(monkeypatch):
     captured = {}
 
-    async def fake_invoke_sql_chain(prompt, llm, payload, dialect="mysql"):
-        captured["input_variables"] = prompt.input_variables
+    async def fake_invoke_sql_gateway(prompt_name, payload, dialect="mysql"):
+        captured["prompt_name"] = prompt_name
         captured["payload"] = payload
         return "select order_amount from fact_order"
 
-    monkeypatch.setattr(correct_sql_module, "invoke_sql_chain", fake_invoke_sql_chain)
+    monkeypatch.setattr(correct_sql_module, "invoke_sql_gateway", fake_invoke_sql_gateway)
     events = []
     runtime = SimpleNamespace(stream_writer=events.append)
     state = {
@@ -44,10 +44,11 @@ async def test_correct_sql_prompt_receives_internal_context(monkeypatch):
     result = await correct_sql(state, runtime)
 
     payload = captured["payload"]
-    assert "query_plan" in captured["input_variables"]
-    assert "error_code" in captured["input_variables"]
-    assert "validation_detail" in captured["input_variables"]
-    assert "sql_cost" in captured["input_variables"]
+    assert captured["prompt_name"] == "correct_sql"
+    assert "query_plan" in payload
+    assert "error_code" in payload
+    assert "validation_detail" in payload
+    assert "sql_cost" in payload
     assert "intent: aggregate" in payload["query_plan"]
     assert payload["error_code"] == "SQL_VALIDATION_FAILED"
     assert payload["validation_detail"] == "Unknown column 'bad_column' in 'field list'"

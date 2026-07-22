@@ -9,14 +9,15 @@ from langgraph.runtime import Runtime
 from pydantic import ValidationError
 
 from app.agent.context import DataAgentContext
-from app.agent.llm import llm
 from app.agent.schemas.query_plan import MetricSelectionResult
 from app.agent.state import DataAgentState, MetricInfoState
 from app.config.app_config import app_config
 from app.core.logging import logger
+from app.llm.gateway import llm_gateway
 from app.prompt.prompt_loader import load_prompt
 
 METRIC_SELECTION_PARSER = PydanticOutputParser(pydantic_object=MetricSelectionResult)
+llm: Any = llm_gateway
 
 
 def metric_selection_format_instructions() -> str:
@@ -24,6 +25,10 @@ def metric_selection_format_instructions() -> str:
 
 
 async def _invoke_metric_selection(prompt: PromptTemplate, payload: dict[str, Any]) -> MetricSelectionResult:
+    if hasattr(llm, "ainvoke_structured"):
+        return await llm.ainvoke_structured(
+            "filter_metric_info", payload, MetricSelectionResult, METRIC_SELECTION_PARSER
+        )
     if hasattr(llm, "with_structured_output"):
         try:
             structured_llm = llm.with_structured_output(MetricSelectionResult)

@@ -57,6 +57,8 @@ telemetry:
 
 llm:
   model_name: deepseek-ai/DeepSeek-V3
+  default_model: deepseek-ai/DeepSeek-V3
+  fallback_model: ""
   api_key: your_siliconflow_api_key_here
   base_url: https://api.siliconflow.cn/v1
   temperature: 0
@@ -110,6 +112,13 @@ agent:
     - release_lock
     - sleep
     - uuid_short
+
+prompt:
+  version_enabled: true
+  default_version: v1
+
+cost:
+  enabled: true
 
 security:
   sensitive_fields:
