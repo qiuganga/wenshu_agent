@@ -85,6 +85,8 @@ class TelemetryConfig:
 @dataclass
 class LLMConfig:
     model_name: str = "deepseek-ai/DeepSeek-V3"
+    default_model: str = ""
+    fallback_model: str = ""
     api_key: str = ""
     base_url: str = "https://api.siliconflow.cn/v1"
     temperature: float = 0
@@ -134,6 +136,17 @@ class AgentConfig:
 
 
 @dataclass
+class PromptConfig:
+    version_enabled: bool = True
+    default_version: str = "v1"
+
+
+@dataclass
+class CostConfig:
+    enabled: bool = True
+
+
+@dataclass
 class SecurityConfig:
     sensitive_fields: list[str] = field(default_factory=lambda: sorted(DEFAULT_SENSITIVE_FIELDS))
 
@@ -157,6 +170,8 @@ class AppConfig:
     telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
+    prompt: PromptConfig = field(default_factory=PromptConfig)
+    cost: CostConfig = field(default_factory=CostConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
     metadata_sync: MetadataSyncConfig = field(default_factory=MetadataSyncConfig)
 
@@ -169,6 +184,8 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
     placeholder_values = {"", "your_siliconflow_api_key_here", "changeme", "change_me"}
     if config.llm.api_key.strip() in placeholder_values:
         raise ValueError("llm.api_key is not configured")
+    if not (config.llm.default_model or config.llm.model_name).strip():
+        raise ValueError("llm.default_model or llm.model_name must not be empty")
     if config.db_dw.user.lower() == "root":
         raise ValueError("Agent DW database user must not be root")
     if config.agent.max_result_rows <= 0:
@@ -265,3 +282,5 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("telemetry.service_name must not be empty")
     if config.telemetry.exporter not in {"console", "none"}:
         raise ValueError("telemetry.exporter must be console or none")
+    if not config.prompt.default_version.strip():
+        raise ValueError("prompt.default_version must not be empty")

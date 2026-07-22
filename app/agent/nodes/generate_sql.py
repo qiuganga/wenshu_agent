@@ -1,37 +1,18 @@
 import yaml
-from langchain_core.prompts import PromptTemplate
 from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
-from app.agent.llm import llm
-from app.agent.nodes._sql_output import invoke_sql_chain, sql_format_instructions
+from app.agent.nodes._sql_output import invoke_sql_gateway, sql_format_instructions
 from app.agent.state import DataAgentState
 from app.core.logging import logger
-from app.prompt.prompt_loader import load_prompt
 
 
 async def generate_sql(state: DataAgentState, runtime: Runtime[DataAgentContext]):
     writer = runtime.stream_writer
     writer({"event": "stage", "node": "generate_sql", "message": "Generating SQL"})
 
-    prompt = PromptTemplate(
-        template=load_prompt("generate_sql"),
-        input_variables=[
-            "query",
-            "query_plan",
-            "table_infos",
-            "metric_infos",
-            "date_info",
-            "db_info",
-            "format_instructions",
-            "previous_output",
-            "parse_error",
-            "correction_instruction",
-        ],
-    )
-    sql = await invoke_sql_chain(
-        prompt,
-        llm,
+    sql = await invoke_sql_gateway(
+        "generate_sql",
         {
             "query": state["query"],
             "query_plan": yaml.dump(state.get("query_plan", {}), allow_unicode=True, sort_keys=False),

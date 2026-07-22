@@ -172,8 +172,8 @@ async def test_runtime_global_and_user_admission_limits_recover_slots(monkeypatc
 
 @pytest.mark.asyncio
 async def test_runtime_total_timeout_cancels_graph_and_has_single_error(monkeypatch):
-    monkeypatch.setattr(query_service_module.app_config.agent, "query_total_timeout_seconds", 0.001)
-    graph = RecordingGraph(delay=0.05)
+    monkeypatch.setattr(query_service_module.app_config.agent, "query_total_timeout_seconds", 0.01)
+    graph = RecordingGraph(delay=0.2)
     service, controller, _registry = fresh_service(monkeypatch, graph)
 
     events = parse_sse(await collect(service, QueryRequest(query="hello", request_id="timeout-1")))

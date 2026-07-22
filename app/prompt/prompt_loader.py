@@ -1,6 +1,5 @@
-from pathlib import Path
+from app.llm.prompt_manager import prompt_template_manager
 
 
 def load_prompt(name: str) -> str:
-    prompt_path = Path(__file__).parents[2] / "prompts" / f"{name}.prompt"
-    return prompt_path.read_text(encoding="utf-8")
+    return prompt_template_manager.load_template(name)

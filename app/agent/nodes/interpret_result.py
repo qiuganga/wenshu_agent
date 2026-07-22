@@ -4,18 +4,15 @@ import time
 from typing import Any
 
 import yaml
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
 from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
-from app.agent.llm import llm
 from app.agent.state import DataAgentState
 from app.config.app_config import app_config
 from app.core.context import request_id_ctx_var
 from app.core.logging import logger
 from app.core.telemetry import telemetry_manager
-from app.prompt.prompt_loader import load_prompt
+from app.llm.gateway import llm_gateway
 from app.security.data_masking import mask_rows
 
 FALLBACK_MAX_CHARS = 500
@@ -104,13 +101,12 @@ def build_interpretation_fallback(summary: dict[str, Any]) -> str:
 
 
 async def _stream_llm_interpretation(state: DataAgentState, summary: dict[str, Any]):
-    prompt = PromptTemplate(template=load_prompt("interpret_result"), input_variables=["query", "summary"])
-    chain = prompt | llm | StrOutputParser()
-    async for token in chain.astream(
+    async for token in llm_gateway.astream_text(
+        "interpret_result",
         {
             "query": state["query"],
             "summary": yaml.dump(summary, allow_unicode=True, sort_keys=False),
-        }
+        },
     ):
         yield token
 
