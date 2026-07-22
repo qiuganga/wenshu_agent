@@ -68,6 +68,10 @@ SAFE_ATTRIBUTE_KEYS = {
     "sql_access_result",
     "tool_name",
     "user_hash",
+    "capability",
+    "agent_name",
+    "receiver",
+    "sender",
 }
 SENSITIVE_KEY_PARTS = (
     "api_key",
@@ -143,6 +147,9 @@ class TelemetryManager:
         self.semantic_cache_rejected_total = _NoopInstrument()
         self.evaluation_failed_total = _NoopInstrument()
         self.regression_failed_total = _NoopInstrument()
+        self.agent_route_total = _NoopInstrument()
+        self.handoff_total = _NoopInstrument()
+        self.agent_failure_total = _NoopInstrument()
         self.query_latency_seconds = _NoopInstrument()
         self.evaluation_score = _NoopInstrument()
         self.startup_time_seconds = _NoopInstrument()
@@ -211,6 +218,9 @@ class TelemetryManager:
         self.semantic_cache_rejected_total = self._meter.create_counter("semantic_cache_rejected_total")
         self.evaluation_failed_total = self._meter.create_counter("evaluation_failed_total")
         self.regression_failed_total = self._meter.create_counter("regression_failed_total")
+        self.agent_route_total = self._meter.create_counter("agent_route_total")
+        self.handoff_total = self._meter.create_counter("handoff_total")
+        self.agent_failure_total = self._meter.create_counter("agent_failure_total")
         self.query_latency_seconds = self._meter.create_histogram("query_latency_seconds")
         self.evaluation_score = self._meter.create_histogram("evaluation_score")
         self.startup_time_seconds = self._meter.create_histogram("startup_time_seconds")
