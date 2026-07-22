@@ -1,0 +1,13 @@
+{
+  "dataset_version": "v1",
+  "cases": [
+    {
+      "id": "case_001",
+      "question": "查询销售额最高的地区",
+      "expected_tables": ["fact_order"],
+      "expected_tools": ["sql_query"],
+      "expected_retrieval": ["fact_order"],
+      "expected_answer": "销售额最高的地区"
+    }
+  ]
+}

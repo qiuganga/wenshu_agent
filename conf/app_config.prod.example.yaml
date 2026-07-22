@@ -51,6 +51,12 @@ authorization:
 tool_security:
   require_permission: true
 
+evaluation:
+  enabled: true
+  dataset_path: datasets/evaluation/golden.json
+  regression_threshold: 0.05
+  judge_mode: rule
+
 llm:
   model_name: deepseek-ai/DeepSeek-V3
   default_model: deepseek-ai/DeepSeek-V3
