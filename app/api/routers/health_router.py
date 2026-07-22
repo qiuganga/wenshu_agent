@@ -8,6 +8,7 @@ from app.clients.embedding_client_manager import embedding_client_manager
 from app.clients.es_client_manager import es_client_manager
 from app.clients.mysql_client_manager import dw_mysql_client_manager, meta_mysql_client_manager
 from app.clients.qdrant_client_manager import qdrant_client_manager
+from app.clients.redis_client_manager import redis_client_manager
 
 health_router = APIRouter()
 
@@ -36,6 +37,12 @@ async def _check_es() -> bool:
     return bool(await es_client_manager.client.ping())
 
 
+async def _check_redis() -> bool:
+    if redis_client_manager.client is None:
+        return False
+    return bool(await redis_client_manager.client.ping())
+
+
 async def _check_embedding() -> bool:
     client = embedding_client_manager.client
     if client is None:
@@ -53,6 +60,7 @@ async def ready():
         "dw_mysql": _check_mysql(dw_mysql_client_manager),
         "qdrant": _check_qdrant(),
         "elasticsearch": _check_es(),
+        "redis": _check_redis(),
         "embedding": _check_embedding(),
     }
     results = {}

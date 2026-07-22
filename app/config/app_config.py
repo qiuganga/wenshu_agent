@@ -66,6 +66,16 @@ class ESConfig:
 
 
 @dataclass
+class RedisConfig:
+    host: str = "localhost"
+    port: int = 6379
+    db: int = 0
+    password: str = ""
+    key_prefix: str = "wenshu-agent"
+    socket_timeout_seconds: float = 2
+
+
+@dataclass
 class LLMConfig:
     model_name: str = "deepseek-ai/DeepSeek-V3"
     api_key: str = ""
@@ -135,6 +145,7 @@ class AppConfig:
     qdrant: QdrantConfig = field(default_factory=QdrantConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     es: ESConfig = field(default_factory=ESConfig)
+    redis: RedisConfig = field(default_factory=RedisConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
@@ -229,3 +240,11 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("metadata_sync.max_values_per_column must be greater than 0")
     if config.metadata_sync.batch_size <= 0:
         raise ValueError("metadata_sync.batch_size must be greater than 0")
+    if config.redis.port <= 0 or config.redis.port > 65535:
+        raise ValueError("redis.port must be between 1 and 65535")
+    if config.redis.db < 0:
+        raise ValueError("redis.db must be >= 0")
+    if config.redis.socket_timeout_seconds <= 0:
+        raise ValueError("redis.socket_timeout_seconds must be greater than 0")
+    if not config.redis.key_prefix.strip():
+        raise ValueError("redis.key_prefix must not be empty")
