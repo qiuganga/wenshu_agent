@@ -275,7 +275,7 @@ uv run ruff check .
 uv run ruff format --check .
 uv run pytest -q
 uv run pytest --cov=app --cov-report=term-missing
-uv run mypy app/security app/agent app/service app/api app/core
+uv run mypy app/security app/agent app/service app/api app/core app/cache
 uv run python -m evals.run_evaluation --smoke
 ```
 

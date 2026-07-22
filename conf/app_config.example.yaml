@@ -120,6 +120,22 @@ prompt:
 cost:
   enabled: true
 
+cache:
+  enabled: true
+  exact_enabled: true
+  semantic_enabled: true
+  exact_ttl_seconds: 300
+  semantic_ttl_seconds: 900
+  semantic_similarity_threshold: 0.92
+  semantic_top_k: 5
+  max_entry_bytes: 65536
+  lease_ttl_seconds: 30
+  lease_wait_timeout_seconds: 5
+  namespace_version: v1
+  data_version: v1
+  semantic_collection_name: wenshu_agent_semantic_cache
+  cache_safe_final_summary: false
+
 security:
   sensitive_fields:
     - account_no

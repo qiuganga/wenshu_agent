@@ -34,16 +34,27 @@ SAFE_ATTRIBUTE_KEYS = {
     "execution_id",
     "estimated_cost",
     "fallback_used",
+    "cache_entry_age_seconds",
+    "cache_entry_size",
+    "cache_hit",
+    "cache_type",
+    "candidate_count",
+    "data_version",
     "input_tokens",
     "latency_ms",
     "model_name",
     "node_name",
     "output_tokens",
+    "prompt_version",
+    "query_hash",
     "request_id",
     "retry_count",
     "row_count",
+    "scope_hash",
+    "similarity_score",
     "sql_hash",
     "table_names",
+    "threshold",
     "total_tokens",
     "trace_id",
 }
@@ -105,10 +116,26 @@ class TelemetryManager:
         self.query_timeout_total = _NoopInstrument()
         self.admission_reject_total = _NoopInstrument()
         self.checkpoint_recovery_total = _NoopInstrument()
+        self.cache_lookup_total = _NoopInstrument()
+        self.cache_hit_total = _NoopInstrument()
+        self.cache_miss_total = _NoopInstrument()
+        self.exact_cache_hit_total = _NoopInstrument()
+        self.semantic_cache_hit_total = _NoopInstrument()
+        self.cache_write_total = _NoopInstrument()
+        self.cache_write_failed_total = _NoopInstrument()
+        self.cache_invalidated_total = _NoopInstrument()
+        self.cache_lease_contention_total = _NoopInstrument()
+        self.semantic_cache_rejected_total = _NoopInstrument()
         self.query_latency_seconds = _NoopInstrument()
         self.sql_execution_seconds = _NoopInstrument()
         self.llm_latency_seconds = _NoopInstrument()
+        self.cache_lookup_latency_seconds = _NoopInstrument()
+        self.embedding_latency_seconds = _NoopInstrument()
+        self.semantic_search_latency_seconds = _NoopInstrument()
+        self.cache_entry_age_seconds = _NoopInstrument()
+        self.semantic_similarity_score = _NoopInstrument()
         self._active_queries = 0
+        self._cache_lease_active = 0
 
     def init(self) -> None:
         self.enabled = bool(app_config.telemetry.enabled)
@@ -146,9 +173,24 @@ class TelemetryManager:
         self.query_timeout_total = self._meter.create_counter("query_timeout_total")
         self.admission_reject_total = self._meter.create_counter("admission_reject_total")
         self.checkpoint_recovery_total = self._meter.create_counter("checkpoint_recovery_total")
+        self.cache_lookup_total = self._meter.create_counter("cache_lookup_total")
+        self.cache_hit_total = self._meter.create_counter("cache_hit_total")
+        self.cache_miss_total = self._meter.create_counter("cache_miss_total")
+        self.exact_cache_hit_total = self._meter.create_counter("exact_cache_hit_total")
+        self.semantic_cache_hit_total = self._meter.create_counter("semantic_cache_hit_total")
+        self.cache_write_total = self._meter.create_counter("cache_write_total")
+        self.cache_write_failed_total = self._meter.create_counter("cache_write_failed_total")
+        self.cache_invalidated_total = self._meter.create_counter("cache_invalidated_total")
+        self.cache_lease_contention_total = self._meter.create_counter("cache_lease_contention_total")
+        self.semantic_cache_rejected_total = self._meter.create_counter("semantic_cache_rejected_total")
         self.query_latency_seconds = self._meter.create_histogram("query_latency_seconds")
         self.sql_execution_seconds = self._meter.create_histogram("sql_execution_seconds")
         self.llm_latency_seconds = self._meter.create_histogram("llm_latency_seconds")
+        self.cache_lookup_latency_seconds = self._meter.create_histogram("cache_lookup_latency_seconds")
+        self.embedding_latency_seconds = self._meter.create_histogram("embedding_latency_seconds")
+        self.semantic_search_latency_seconds = self._meter.create_histogram("semantic_search_latency_seconds")
+        self.cache_entry_age_seconds = self._meter.create_histogram("cache_entry_age_seconds")
+        self.semantic_similarity_score = self._meter.create_histogram("semantic_similarity_score")
 
     def new_trace_id(self) -> str:
         return uuid.uuid4().hex
@@ -233,6 +275,11 @@ class TelemetryManager:
         self._active_queries = max(0, value)
         if self.capture_for_tests:
             self._metrics.append(CapturedMetric("active_queries", self._active_queries, {}))
+
+    def set_cache_lease_active(self, value: int) -> None:
+        self._cache_lease_active = max(0, value)
+        if self.capture_for_tests:
+            self._metrics.append(CapturedMetric("cache_lease_active", self._cache_lease_active, {}))
 
     def enable_test_capture(self) -> None:
         self.capture_for_tests = True

@@ -42,6 +42,8 @@ def build_query_audit_record(
     dropped_sse_events: int | None = None,
     duplicate_request: bool | None = None,
     client_disconnected: bool | None = None,
+    cache_hit: bool | None = None,
+    cache_type: str | None = None,
 ) -> dict[str, Any]:
     cost = sql_cost or {}
     return {
@@ -63,6 +65,8 @@ def build_query_audit_record(
         "dropped_sse_events": dropped_sse_events,
         "duplicate_request": duplicate_request,
         "client_disconnected": client_disconnected,
+        "cache_hit": cache_hit,
+        "cache_type": cache_type,
     }
 
 
