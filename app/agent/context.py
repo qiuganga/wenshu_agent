@@ -7,6 +7,7 @@ from app.repository.mysql.dw_mysql_repository import DWMySQLRepository
 from app.repository.mysql.meta_mysql_repository import MetaMySQLRepository
 from app.repository.qdrant.column_qdrant_repository import ColumnQdrantRepository
 from app.repository.qdrant.metric_qdrant_repository import MetricQdrantRepository
+from app.security.context import SecurityContext
 
 
 class DataAgentContext(TypedDict):
@@ -16,3 +17,4 @@ class DataAgentContext(TypedDict):
     metric_qdrant_repository: MetricQdrantRepository
     meta_mysql_repository: MetaMySQLRepository
     dw_mysql_repository: DWMySQLRepository
+    security_context: SecurityContext

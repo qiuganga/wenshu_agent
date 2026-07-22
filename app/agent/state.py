@@ -87,6 +87,12 @@ class DataAgentState(TypedDict, total=False):
     user_active_queries: int
     execution_id: str
     request_id: str
+    security_context: dict[str, Any]
+    permission_decision: str
+    denied_reason: str | None
+    sql_access_result: dict[str, Any]
+    masking_applied: bool
+    prompt_risk_level: str
     dropped_sse_events: int
     duplicate_request: bool
     client_disconnected: bool
@@ -141,6 +147,12 @@ def create_initial_state(query: str, max_retries: int | None = None) -> DataAgen
         user_active_queries=0,
         execution_id="",
         request_id="",
+        security_context={},
+        permission_decision="",
+        denied_reason=None,
+        sql_access_result={},
+        masking_applied=False,
+        prompt_risk_level="LOW",
         dropped_sse_events=0,
         duplicate_request=False,
         client_disconnected=False,

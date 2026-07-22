@@ -44,6 +44,13 @@ def build_query_audit_record(
     client_disconnected: bool | None = None,
     cache_hit: bool | None = None,
     cache_type: str | None = None,
+    user_id_hash: str | None = None,
+    permission_decision: str | None = None,
+    denied_reason: str | None = None,
+    tool_name: str | None = None,
+    sql_access_result: str | None = None,
+    masking_applied: bool | None = None,
+    prompt_risk_level: str | None = None,
 ) -> dict[str, Any]:
     cost = sql_cost or {}
     return {
@@ -67,6 +74,13 @@ def build_query_audit_record(
         "client_disconnected": client_disconnected,
         "cache_hit": cache_hit,
         "cache_type": cache_type,
+        "user_id_hash": user_id_hash,
+        "permission_decision": permission_decision,
+        "denied_reason": denied_reason,
+        "tool_name": tool_name,
+        "sql_access_result": sql_access_result,
+        "masking_applied": masking_applied,
+        "prompt_risk_level": prompt_risk_level,
     }
 
 
