@@ -19,6 +19,12 @@ log_format = (
     "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
     "<level>{message}</level>"
 )
+json_log_format = (
+    '{{"time":"{time:YYYY-MM-DDTHH:mm:ss.SSSZ}","level":"{level}",'
+    '"request_id":"{extra[request_id]}","trace_id":"{extra[trace_id]}",'
+    '"execution_id":"{extra[execution_id]}","module":"{name}",'
+    '"function":"{function}","line":{line},"message":"{message}"}}'
+)
 
 
 def inject_request_id(record):
@@ -34,14 +40,18 @@ def inject_request_id(record):
 logger.remove()
 logger = logger.patch(inject_request_id)
 if app_config.logging.console.enable:
-    logger.add(sink=sys.stdout, level=app_config.logging.console.level, format=log_format)
+    logger.add(
+        sink=sys.stdout,
+        level=app_config.logging.console.level,
+        format=json_log_format if app_config.logging.json_format else log_format,
+    )
 if app_config.logging.file.enable:
     path = Path(app_config.logging.file.path)
     path.mkdir(parents=True, exist_ok=True)
     logger.add(
         sink=path / "app.log",
         level=app_config.logging.file.level,
-        format=log_format,
+        format=json_log_format if app_config.logging.json_format else log_format,
         rotation=app_config.logging.file.rotation,
         retention=app_config.logging.file.retention,
         encoding="utf-8",

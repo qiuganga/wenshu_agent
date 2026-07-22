@@ -1,0 +1,88 @@
+app:
+  environment: production
+  debug: false
+
+runtime:
+  environment: prod
+
+server:
+  host: 0.0.0.0
+  port: 8000
+  workers: 2
+  shutdown_timeout_seconds: 30
+
+logging:
+  file:
+    enable: false
+    level: INFO
+    path: logs
+    rotation: "10 MB"
+    retention: "7 days"
+  console:
+    enable: true
+    level: INFO
+  json_format: true
+
+security:
+  production_mode: true
+  sensitive_fields:
+    - account_no
+    - api_key
+    - bank_card
+    - email
+    - id_card
+    - identity_card
+    - mobile
+    - passwd
+    - password
+    - phone
+    - secret
+    - telephone
+    - token
+
+llm:
+  model_name: deepseek-ai/DeepSeek-V3
+  default_model: deepseek-ai/DeepSeek-V3
+  fallback_model: ""
+  api_key: your_api_key_here
+  base_url: https://api.siliconflow.cn/v1
+  temperature: 0
+  timeout_seconds: 30
+  max_retries: 2
+
+db_meta:
+  host: mysql
+  port: 3306
+  user: ghy
+  password: change_me
+  database: meta
+
+db_dw:
+  host: mysql
+  port: 3306
+  user: ghy_readonly
+  password: change_me
+  database: dw
+
+redis:
+  host: redis
+  port: 6379
+  db: 0
+  password: change_me
+  key_prefix: wenshu-agent
+  socket_timeout_seconds: 2
+
+qdrant:
+  host: qdrant
+  port: 6333
+  embedding_size: 1024
+
+embedding:
+  host: embedding
+  port: 80
+  model: BAAI/bge-large-zh-v1.5
+
+es:
+  host: elasticsearch
+  port: 9200
+  index_name: data-agent-value

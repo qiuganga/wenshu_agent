@@ -15,6 +15,19 @@ class AppMetaConfig:
 
 
 @dataclass
+class RuntimeConfig:
+    environment: str = "dev"
+
+
+@dataclass
+class ServerConfig:
+    host: str = "0.0.0.0"
+    port: int = 8000
+    workers: int = 1
+    shutdown_timeout_seconds: float = 5
+
+
+@dataclass
 class File:
     enable: bool = True
     level: str = "INFO"
@@ -33,6 +46,7 @@ class Console:
 class LoggingConfig:
     file: File = field(default_factory=File)
     console: Console = field(default_factory=Console)
+    json_format: bool = False
 
 
 @dataclass
@@ -167,6 +181,7 @@ class CacheConfig:
 @dataclass
 class SecurityConfig:
     sensitive_fields: list[str] = field(default_factory=lambda: sorted(DEFAULT_SENSITIVE_FIELDS))
+    production_mode: bool = False
 
 
 @dataclass
@@ -178,6 +193,8 @@ class MetadataSyncConfig:
 @dataclass
 class AppConfig:
     app: AppMetaConfig = field(default_factory=AppMetaConfig)
+    runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
+    server: ServerConfig = field(default_factory=ServerConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     db_meta: DBConfig = field(default_factory=DBConfig)
     db_dw: DBConfig = field(default_factory=DBConfig)
@@ -329,3 +346,28 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("cache.data_version must not be empty")
     if not config.cache.semantic_collection_name.strip():
         raise ValueError("cache.semantic_collection_name must not be empty")
+    if config.runtime.environment not in {"dev", "test", "prod"}:
+        raise ValueError("runtime.environment must be dev, test or prod")
+    if config.server.port <= 0 or config.server.port > 65535:
+        raise ValueError("server.port must be between 1 and 65535")
+    if config.server.workers <= 0:
+        raise ValueError("server.workers must be greater than 0")
+    if config.server.workers > 64:
+        raise ValueError("server.workers must be <= 64")
+    if config.server.shutdown_timeout_seconds <= 0:
+        raise ValueError("server.shutdown_timeout_seconds must be greater than 0")
+    if config.server.shutdown_timeout_seconds > 300:
+        raise ValueError("server.shutdown_timeout_seconds must be <= 300")
+    if config.security.production_mode or config.runtime.environment == "prod":
+        if config.app.debug:
+            raise ValueError("app.debug must be false in production")
+        if config.agent.log_full_sql:
+            raise ValueError("agent.log_full_sql must be false in production")
+        if config.agent.expose_raw_rows_to_client:
+            raise ValueError("agent.expose_raw_rows_to_client must be false in production")
+        if config.llm.api_key.strip() in placeholder_values:
+            raise ValueError("llm.api_key must be configured in production")
+        if config.db_dw.password.strip() in placeholder_values:
+            raise ValueError("db_dw.password must be configured in production")
+        if config.db_meta.password.strip() in placeholder_values:
+            raise ValueError("db_meta.password must be configured in production")

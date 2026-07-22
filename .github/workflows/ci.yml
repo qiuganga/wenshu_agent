@@ -50,7 +50,7 @@ jobs:
         with:
           python-version-file: .python-version
       - run: uv sync --frozen
-      - run: uv run mypy app/security app/agent app/service app/api app/core
+      - run: uv run mypy app/security app/agent app/service app/api app/core app/cache app/llm
 
   evaluation-smoke:
     runs-on: ubuntu-latest

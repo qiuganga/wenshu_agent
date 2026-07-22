@@ -1,0 +1,47 @@
+FROM python:3.13-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /build
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml uv.lock .python-version README.md ./
+RUN pip install --no-cache-dir uv==0.9.18 \
+    && uv sync --frozen --no-dev
+
+FROM python:3.13-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    APP_SKIP_RUNTIME_CONFIG_VALIDATION=0
+
+WORKDIR /app
+
+RUN groupadd --system app \
+    && useradd --system --gid app --home /app --shell /usr/sbin/nologin app \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/.venv /app/.venv
+COPY app /app/app
+COPY conf/app_config.example.yaml /app/conf/app_config.example.yaml
+COPY prompts /app/prompts
+COPY main.py pyproject.toml README.md /app/
+
+RUN chown -R app:app /app
+USER app
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8000/health/live >/dev/null || exit 1
+
+CMD ["fastapi", "run", "main.py", "--host", "0.0.0.0", "--port", "8000"]
