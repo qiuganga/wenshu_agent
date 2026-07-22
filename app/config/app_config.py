@@ -200,6 +200,14 @@ class ToolSecurityConfig:
 
 
 @dataclass
+class EvaluationConfig:
+    enabled: bool = True
+    dataset_path: str = "datasets/evaluation/golden.json"
+    regression_threshold: float = 0.05
+    judge_mode: str = "rule"
+
+
+@dataclass
 class MetadataSyncConfig:
     max_values_per_column: int = 5000
     batch_size: int = 100
@@ -226,6 +234,7 @@ class AppConfig:
     security: SecurityConfig = field(default_factory=SecurityConfig)
     authorization: AuthorizationConfig = field(default_factory=AuthorizationConfig)
     tool_security: ToolSecurityConfig = field(default_factory=ToolSecurityConfig)
+    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     metadata_sync: MetadataSyncConfig = field(default_factory=MetadataSyncConfig)
 
 
@@ -365,6 +374,12 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("cache.semantic_collection_name must not be empty")
     if config.security.default_policy not in {"deny", "allow"}:
         raise ValueError("security.default_policy must be deny or allow")
+    if config.evaluation.regression_threshold < 0 or config.evaluation.regression_threshold > 1:
+        raise ValueError("evaluation.regression_threshold must be between 0 and 1")
+    if config.evaluation.judge_mode not in {"rule", "llm"}:
+        raise ValueError("evaluation.judge_mode must be rule or llm")
+    if not config.evaluation.dataset_path.strip():
+        raise ValueError("evaluation.dataset_path must not be empty")
     if config.runtime.environment not in {"dev", "test", "prod"}:
         raise ValueError("runtime.environment must be dev, test or prod")
     if config.server.port <= 0 or config.server.port > 65535:

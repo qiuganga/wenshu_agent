@@ -174,6 +174,12 @@ authorization:
 tool_security:
   require_permission: true
 
+evaluation:
+  enabled: true
+  dataset_path: datasets/evaluation/golden.json
+  regression_threshold: 0.05
+  judge_mode: rule
+
 metadata_sync:
   max_values_per_column: 5000
   batch_size: 100
