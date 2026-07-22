@@ -182,6 +182,21 @@ class CacheConfig:
 class SecurityConfig:
     sensitive_fields: list[str] = field(default_factory=lambda: sorted(DEFAULT_SENSITIVE_FIELDS))
     production_mode: bool = False
+    enabled: bool = True
+    default_policy: str = "deny"
+    prompt_guard_enabled: bool = True
+    masking_enabled: bool = True
+
+
+@dataclass
+class AuthorizationConfig:
+    rbac_enabled: bool = True
+    abac_enabled: bool = True
+
+
+@dataclass
+class ToolSecurityConfig:
+    require_permission: bool = True
 
 
 @dataclass
@@ -209,6 +224,8 @@ class AppConfig:
     cost: CostConfig = field(default_factory=CostConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
+    authorization: AuthorizationConfig = field(default_factory=AuthorizationConfig)
+    tool_security: ToolSecurityConfig = field(default_factory=ToolSecurityConfig)
     metadata_sync: MetadataSyncConfig = field(default_factory=MetadataSyncConfig)
 
 
@@ -346,6 +363,8 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("cache.data_version must not be empty")
     if not config.cache.semantic_collection_name.strip():
         raise ValueError("cache.semantic_collection_name must not be empty")
+    if config.security.default_policy not in {"deny", "allow"}:
+        raise ValueError("security.default_policy must be deny or allow")
     if config.runtime.environment not in {"dev", "test", "prod"}:
         raise ValueError("runtime.environment must be dev, test or prod")
     if config.server.port <= 0 or config.server.port > 65535:

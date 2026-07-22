@@ -13,6 +13,7 @@ class QueryRequest(BaseModel):
     conversation_id: str | None = None
     request_id: str | None = None
     user_id: str | None = None
+    tenant_id: str | None = None
     execution_id: str | None = None
     max_rows: int | None = Field(default=None, ge=1)
 
@@ -36,7 +37,7 @@ class QueryRequest(BaseModel):
             raise ValueError("conversation_id contains invalid characters or is too long")
         return stripped
 
-    @field_validator("request_id", "user_id", "execution_id")
+    @field_validator("request_id", "user_id", "tenant_id", "execution_id")
     @classmethod
     def validate_safe_id(cls, value: str | None) -> str | None:
         if value is None:

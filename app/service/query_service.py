@@ -18,7 +18,7 @@ from app.cache.models import CacheIdentity
 from app.cache.service import QueryCacheService, query_cache_service
 from app.clients.redis_client_manager import redis_client_manager
 from app.config.app_config import app_config
-from app.core.context import execution_id_ctx_var, request_id_ctx_var
+from app.core.context import execution_id_ctx_var, request_id_ctx_var, trace_id_ctx_var
 from app.core.events import AgentEvent, elapsed_ms, format_sse
 from app.core.exceptions import AppException, sanitize_exception
 from app.core.query_audit import log_query_audit
@@ -28,6 +28,8 @@ from app.repository.mysql.dw_mysql_repository import DWMySQLRepository
 from app.repository.mysql.meta_mysql_repository import MetaMySQLRepository
 from app.repository.qdrant.column_qdrant_repository import ColumnQdrantRepository
 from app.repository.qdrant.metric_qdrant_repository import MetricQdrantRepository
+from app.security.context import SecurityContext, create_security_context
+from app.security.prompt_guard import prompt_injection_guard
 from app.service.query_lifecycle import (
     AdmissionLease,
     LifecycleSSEQueue,
@@ -87,7 +89,7 @@ class QueryService:
         self.agent_graph: Any = agent_graph or graph
         self.cache_service = cache_service or query_cache_service
 
-    def _context(self) -> DataAgentContext:
+    def _context(self, security_context: SecurityContext) -> DataAgentContext:
         return DataAgentContext(
             embedding_client=self.embedding_client,
             column_qdrant_repository=self.column_qdrant_repository,
@@ -95,10 +97,13 @@ class QueryService:
             metric_qdrant_repository=self.metric_qdrant_repository,
             meta_mysql_repository=self.meta_mysql_repository,
             dw_mysql_repository=self.dw_mysql_repository,
+            security_context=security_context,
         )
 
-    async def _produce_graph_chunks(self, stream: LifecycleSSEQueue, state: DataAgentState) -> None:
-        agen = self.agent_graph.astream(input=state, context=self._context(), stream_mode="custom")
+    async def _produce_graph_chunks(
+        self, stream: LifecycleSSEQueue, state: DataAgentState, security_context: SecurityContext
+    ) -> None:
+        agen = self.agent_graph.astream(input=state, context=self._context(security_context), stream_mode="custom")
         try:
             with telemetry_manager.span(
                 "graph_execution",
@@ -130,6 +135,12 @@ class QueryService:
         fallback_request_key = f"local:{id(query_request)}"
         dedup_request_id = query_request.request_id or (request_id if request_id != "-" else None)
         execution_id = query_request.execution_id or ""
+        security_context = create_security_context(
+            user_id=user_id,
+            tenant_id=query_request.tenant_id,
+            request_id=dedup_request_id or request_id,
+            trace_id=trace_id_ctx_var.get(),
+        )
         execution_id_ctx_var.set(execution_id or "-")
         existing_checkpoint = await checkpoint_manager.load(execution_id)
         is_resume = existing_checkpoint is not None and existing_checkpoint.status == CheckpointStatus.RUNNING
@@ -207,6 +218,8 @@ class QueryService:
                 global_active_queries=details.get("global_active_queries"),
                 user_active_queries=details.get("user_active_queries"),
                 duplicate_request=app_exc.code == "DUPLICATE_REQUEST",
+                security_context=security_context,
+                permission_decision="ALLOW",
             )
             yield emit(
                 "error",
@@ -231,7 +244,49 @@ class QueryService:
 
         snapshot = admission_controller.snapshot_for(user_id, admission_lease.wait_ms)
         telemetry_manager.set_active_queries(snapshot.global_active_queries)
-        cache_identity = self.cache_service.build_identity(query=query_request.query, user_id=user_id)
+        if app_config.security.enabled and app_config.security.prompt_guard_enabled:
+            prompt_risk = prompt_injection_guard.check(query_request.query)
+            with telemetry_manager.span(
+                "security.prompt_guard",
+                {"user_hash": security_context.user_hash, "risk_level": prompt_risk.risk_level},
+            ):
+                pass
+            if not prompt_risk.allowed:
+                final_status = "rejected"
+                telemetry_manager.increment_counter(
+                    "query_failed_total", attributes={"error_code": "PROMPT_INJECTION_DETECTED"}
+                )
+                self._audit_terminal(
+                    "PROMPT_INJECTION_DETECTED",
+                    final_status=final_status,
+                    retry_count=0,
+                    admission_wait_ms=snapshot.admission_wait_ms,
+                    global_active_queries=snapshot.global_active_queries,
+                    user_active_queries=snapshot.user_active_queries,
+                    security_context=security_context,
+                    permission_decision="DENY",
+                    denied_reason="prompt_injection_detected",
+                    prompt_risk_level=prompt_risk.risk_level,
+                )
+                yield emit(
+                    "error",
+                    "Prompt injection risk detected",
+                    {"code": "PROMPT_INJECTION_DETECTED", "risk_level": prompt_risk.risk_level},
+                    status="error",
+                )
+                yield emit("done", "Agent execution finished with error", status="error")
+                await request_dedup_registry.complete(dedup_token, "failed")
+                await admission_controller.release(admission_lease)
+                telemetry_manager.set_active_queries(0)
+                telemetry_manager.record_histogram("query_latency_seconds", time.perf_counter() - query_started_at)
+                query_span.__exit__(None, None, None)
+                return
+        cache_identity = self.cache_service.build_identity(
+            query=query_request.query,
+            user_id=user_id,
+            tenant_id=security_context.tenant_or_default,
+            permissions=list(security_context.permissions),
+        )
         cache_lookup = await self.cache_service.lookup(cache_identity)
         if cache_lookup.result.hit and cache_lookup.payload is not None:
             yield emit("result", "Cache hit", cache_lookup.payload, node="cache")
@@ -248,6 +303,8 @@ class QueryService:
                 user_active_queries=snapshot.user_active_queries,
                 cache_hit=True,
                 cache_type=cache_lookup.result.cache_type,
+                security_context=security_context,
+                permission_decision="ALLOW",
             )
             final_status = "success"
             return
@@ -270,6 +327,8 @@ class QueryService:
                     user_active_queries=snapshot.user_active_queries,
                     cache_hit=True,
                     cache_type=filled_lookup.result.cache_type,
+                    security_context=security_context,
+                    permission_decision="ALLOW",
                 )
                 final_status = "success"
                 return
@@ -277,6 +336,8 @@ class QueryService:
         state = create_initial_state(query_request.query)
         state["execution_id"] = execution_id
         state["request_id"] = dedup_request_id or request_id
+        state["security_context"] = security_context.to_safe_dict()
+        state["prompt_risk_level"] = "LOW"
         state["budget"] = budget.summary()
         state["admission_wait_ms"] = snapshot.admission_wait_ms
         state["global_active_queries"] = snapshot.global_active_queries
@@ -289,7 +350,7 @@ class QueryService:
             maxsize=app_config.agent.sse_queue_maxsize,
             put_timeout_seconds=app_config.agent.sse_put_timeout_seconds,
         )
-        graph_task = asyncio.create_task(self._produce_graph_chunks(stream, state))
+        graph_task = asyncio.create_task(self._produce_graph_chunks(stream, state, security_context))
         admission_controller.register_task(graph_task)
         disconnect_task = (
             asyncio.create_task(watch_disconnect(request, app_config.agent.disconnect_poll_interval_seconds))
@@ -412,6 +473,14 @@ class QueryService:
                 budget_exhausted=details.get("budget_exhausted") is True or app_exc.code == "QUERY_TOTAL_TIMEOUT",
                 dropped_sse_events=stream.dropped_events if stream else None,
                 client_disconnected=client_disconnected,
+                security_context=security_context,
+                permission_decision=state.get("permission_decision") or None if "state" in locals() else None,
+                denied_reason=state.get("denied_reason") if "state" in locals() else None,
+                sql_access_result=state.get("sql_access_result", {}).get("permission_decision")
+                if "state" in locals()
+                else None,
+                masking_applied=state.get("masking_applied") if "state" in locals() else None,
+                prompt_risk_level=state.get("prompt_risk_level") if "state" in locals() else None,
             )
         finally:
             if stream is not None:
@@ -446,6 +515,13 @@ class QueryService:
         client_disconnected: bool | None = None,
         cache_hit: bool | None = None,
         cache_type: str | None = None,
+        security_context: SecurityContext | None = None,
+        permission_decision: str | None = None,
+        denied_reason: str | None = None,
+        tool_name: str | None = None,
+        sql_access_result: str | None = None,
+        masking_applied: bool | None = None,
+        prompt_risk_level: str | None = None,
     ) -> None:
         log_query_audit(
             normalized_sql="",
@@ -466,4 +542,11 @@ class QueryService:
             client_disconnected=client_disconnected,
             cache_hit=cache_hit,
             cache_type=cache_type,
+            user_id_hash=security_context.user_hash if security_context else None,
+            permission_decision=permission_decision,
+            denied_reason=denied_reason,
+            tool_name=tool_name,
+            sql_access_result=sql_access_result,
+            masking_applied=masking_applied,
+            prompt_risk_level=prompt_risk_level,
         )

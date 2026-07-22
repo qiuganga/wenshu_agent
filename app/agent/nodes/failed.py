@@ -40,6 +40,12 @@ async def failed(state: DataAgentState, runtime: Runtime[DataAgentContext]):
             dropped_sse_events=state.get("dropped_sse_events"),
             duplicate_request=state.get("duplicate_request"),
             client_disconnected=state.get("client_disconnected"),
+            user_id_hash=(state.get("security_context") or {}).get("user_hash"),
+            permission_decision=state.get("permission_decision"),
+            denied_reason=state.get("denied_reason"),
+            sql_access_result=(state.get("sql_access_result") or {}).get("permission_decision"),
+            masking_applied=state.get("masking_applied"),
+            prompt_risk_level=state.get("prompt_risk_level"),
         )
     writer(
         {

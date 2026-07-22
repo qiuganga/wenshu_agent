@@ -19,4 +19,4 @@ async def summarize_result(state: DataAgentState, runtime: Runtime[DataAgentCont
         sample_value_max_chars=app_config.agent.result_sample_value_max_chars,
     )
     logger.info(f"result summarized rows={summary['row_count']} columns={len(summary['columns'])}")
-    return {"result_summary": summary}
+    return {"result_summary": summary, "masking_applied": app_config.security.masking_enabled}

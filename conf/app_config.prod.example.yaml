@@ -25,6 +25,10 @@ logging:
 
 security:
   production_mode: true
+  enabled: true
+  default_policy: deny
+  prompt_guard_enabled: true
+  masking_enabled: true
   sensitive_fields:
     - account_no
     - api_key
@@ -39,6 +43,13 @@ security:
     - secret
     - telephone
     - token
+
+authorization:
+  rbac_enabled: true
+  abac_enabled: true
+
+tool_security:
+  require_permission: true
 
 llm:
   model_name: deepseek-ai/DeepSeek-V3

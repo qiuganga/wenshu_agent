@@ -2,6 +2,15 @@ app:
   environment: development
   debug: true
 
+runtime:
+  environment: dev
+
+server:
+  host: 0.0.0.0
+  port: 8000
+  workers: 1
+  shutdown_timeout_seconds: 5
+
 logging:
   file:
     enable: true
@@ -12,6 +21,7 @@ logging:
   console:
     enable: true
     level: INFO
+  json_format: false
 
 db_meta:
   host: localhost
@@ -137,6 +147,11 @@ cache:
   cache_safe_final_summary: false
 
 security:
+  enabled: true
+  production_mode: false
+  default_policy: deny
+  prompt_guard_enabled: true
+  masking_enabled: true
   sensitive_fields:
     - account_no
     - api_key
@@ -151,6 +166,13 @@ security:
     - secret
     - telephone
     - token
+
+authorization:
+  rbac_enabled: true
+  abac_enabled: true
+
+tool_security:
+  require_permission: true
 
 metadata_sync:
   max_values_per_column: 5000
