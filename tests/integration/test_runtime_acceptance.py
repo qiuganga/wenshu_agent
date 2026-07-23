@@ -154,17 +154,27 @@ async def test_runtime_duplicate_request_rejected_without_graph_execution(monkey
 
 @pytest.mark.asyncio
 async def test_runtime_global_and_user_admission_limits_recover_slots(monkeypatch):
-    slow_graph = RecordingGraph(delay=0.05)
-    service, controller, _registry = fresh_service(monkeypatch, slow_graph, max_global=1, max_per_user=1)
+    global_graph = RecordingGraph(delay=0.2)
+    service, controller, _registry = fresh_service(monkeypatch, global_graph, max_global=1, max_per_user=2)
 
     first_task = asyncio.create_task(collect(service, QueryRequest(query="hello", request_id="limit-1", user_id="u1")))
-    await asyncio.sleep(0)
+    await asyncio.sleep(0.01)
     global_rejected = parse_sse(await collect(service, QueryRequest(query="hello", request_id="limit-2", user_id="u2")))
-    user_rejected = parse_sse(await collect(service, QueryRequest(query="hello", request_id="limit-3", user_id="u1")))
     first = parse_sse(await first_task)
 
     assert names(first) == ["started", "stage", "result", "done"]
     assert "QUERY_CONCURRENCY_LIMIT" in joined(global_rejected)
+    assert controller.snapshot_for("u1").global_active_queries == 0
+
+    user_graph = RecordingGraph(delay=0.2)
+    service, controller, _registry = fresh_service(monkeypatch, user_graph, max_global=2, max_per_user=1)
+
+    first_task = asyncio.create_task(collect(service, QueryRequest(query="hello", request_id="limit-3", user_id="u1")))
+    await asyncio.sleep(0.01)
+    user_rejected = parse_sse(await collect(service, QueryRequest(query="hello", request_id="limit-4", user_id="u1")))
+    first = parse_sse(await first_task)
+
+    assert names(first) == ["started", "stage", "result", "done"]
     assert "USER_QUERY_CONCURRENCY_LIMIT" in joined(user_rejected)
     assert controller.snapshot_for("u1").global_active_queries == 0
     assert controller.snapshot_for("u1").user_active_queries == 0

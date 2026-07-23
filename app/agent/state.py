@@ -55,6 +55,16 @@ class DataAgentState(TypedDict, total=False):
     metric_candidates: list[MetricInfoQdrant]
     table_infos: list[TableInfoState]
     metric_infos: list[MetricInfoState]
+    table_vector_scores: dict[str, float]
+    metric_vector_scores: dict[str, float]
+    table_candidate_scores: list[dict[str, Any]]
+    metric_candidate_scores: list[dict[str, Any]]
+    table_selection_source: str
+    metric_selection_source: str
+    table_selection_reason_codes: list[str]
+    metric_selection_reason_codes: list[str]
+    uncovered_requirement_count: int
+    relationship_summary: dict[str, Any]
     query_plan: dict[str, Any]
     date_info: DateInfoState
     db_info: DBInfoState
@@ -117,6 +127,16 @@ def create_initial_state(query: str, max_retries: int | None = None) -> DataAgen
         metric_candidates=[],
         table_infos=[],
         metric_infos=[],
+        table_vector_scores={},
+        metric_vector_scores={},
+        table_candidate_scores=[],
+        metric_candidate_scores=[],
+        table_selection_source="",
+        metric_selection_source="",
+        table_selection_reason_codes=[],
+        metric_selection_reason_codes=[],
+        uncovered_requirement_count=0,
+        relationship_summary={},
         query_plan={},
         date_info={},
         db_info={},

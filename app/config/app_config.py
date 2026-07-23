@@ -147,6 +147,39 @@ class AgentConfig:
     expose_trace_to_client: bool = False
     log_full_sql: bool = False
     banned_sql_functions: list[str] = field(default_factory=lambda: sorted(BANNED_FUNCTIONS))
+    candidate_ranking: CandidateRankingConfig = field(default_factory=lambda: CandidateRankingConfig())
+
+
+@dataclass
+class CandidateRankingWeightsConfig:
+    lexical: float = 0.15
+    alias: float = 0.10
+    vector: float = 0.20
+    coverage: float = 0.25
+    value: float = 0.10
+    metric_support: float = 0.10
+    relationship: float = 0.10
+
+
+@dataclass
+class CandidateRankingPenaltiesConfig:
+    disconnected: float = 0.20
+    excessive_join: float = 0.05
+    unsupported_metric: float = 0.25
+
+
+@dataclass
+class CandidateRankingConfig:
+    enabled: bool = True
+    deterministic_top_k_tables: int = 12
+    deterministic_top_k_metrics: int = 12
+    max_selected_tables: int = 6
+    max_selected_metrics: int = 6
+    llm_rerank_enabled: bool = True
+    llm_rerank_timeout_seconds: float = 3
+    max_relationship_depth: int = 4
+    weights: CandidateRankingWeightsConfig = field(default_factory=CandidateRankingWeightsConfig)
+    penalties: CandidateRankingPenaltiesConfig = field(default_factory=CandidateRankingPenaltiesConfig)
 
 
 @dataclass
@@ -424,6 +457,40 @@ def validate_runtime_config(config: AppConfig = app_config) -> None:
         raise ValueError("agent.checkpoint_ttl_seconds must be <= 86400")
     if config.agent.token_batch_chars <= 0:
         raise ValueError("agent.token_batch_chars must be greater than 0")
+    ranking = config.agent.candidate_ranking
+    if ranking.deterministic_top_k_tables <= 0:
+        raise ValueError("agent.candidate_ranking.deterministic_top_k_tables must be greater than 0")
+    if ranking.deterministic_top_k_metrics <= 0:
+        raise ValueError("agent.candidate_ranking.deterministic_top_k_metrics must be greater than 0")
+    if ranking.max_selected_tables <= 0 or ranking.max_selected_tables > ranking.deterministic_top_k_tables:
+        raise ValueError("agent.candidate_ranking.max_selected_tables must be between 1 and deterministic_top_k_tables")
+    if ranking.max_selected_metrics <= 0 or ranking.max_selected_metrics > ranking.deterministic_top_k_metrics:
+        raise ValueError(
+            "agent.candidate_ranking.max_selected_metrics must be between 1 and deterministic_top_k_metrics"
+        )
+    if ranking.llm_rerank_timeout_seconds <= 0:
+        raise ValueError("agent.candidate_ranking.llm_rerank_timeout_seconds must be greater than 0")
+    if ranking.max_relationship_depth < 1:
+        raise ValueError("agent.candidate_ranking.max_relationship_depth must be >= 1")
+    weight_values = [
+        ranking.weights.lexical,
+        ranking.weights.alias,
+        ranking.weights.vector,
+        ranking.weights.coverage,
+        ranking.weights.value,
+        ranking.weights.metric_support,
+        ranking.weights.relationship,
+    ]
+    if any(value < 0 for value in weight_values):
+        raise ValueError("agent.candidate_ranking.weights values must be >= 0")
+    if sum(weight_values) <= 0:
+        raise ValueError("agent.candidate_ranking.weights must include at least one positive value")
+    if (
+        ranking.penalties.disconnected < 0
+        or ranking.penalties.excessive_join < 0
+        or ranking.penalties.unsupported_metric < 0
+    ):
+        raise ValueError("agent.candidate_ranking.penalties values must be >= 0")
     if config.metadata_sync.max_values_per_column <= 0:
         raise ValueError("metadata_sync.max_values_per_column must be greater than 0")
     if config.metadata_sync.batch_size <= 0:

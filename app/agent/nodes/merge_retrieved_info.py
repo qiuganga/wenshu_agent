@@ -51,10 +51,13 @@ async def merge_retrieved_info(state: DataAgentState, runtime: Runtime[DataAgent
                 columns.append(convert_column_info_from_mysql_to_qdrant(key_column))
 
     table_infos: list[TableInfoState] = []
+    table_vector_scores_by_name: dict[str, float] = {}
+    table_vector_scores_by_id = state.get("table_vector_scores", {})
     for table_id, columns in table_to_columns_map.items():
         table = await meta_mysql_repository.get_table_info_by_id(table_id)
         if table is None:
             continue
+        table_vector_scores_by_name[table.name] = table_vector_scores_by_id.get(table_id, 0.0)
         table_infos.append(
             TableInfoState(
                 name=table.name,
@@ -66,7 +69,11 @@ async def merge_retrieved_info(state: DataAgentState, runtime: Runtime[DataAgent
 
     metric_infos = [convert_metric_info_from_qdrant_to_state(metric) for metric in retrieved_metrics]
     logger.info(f"metadata merged table_count={len(table_infos)} metric_count={len(metric_infos)}")
-    return {"table_infos": table_infos, "metric_infos": metric_infos}
+    return {
+        "table_infos": table_infos,
+        "metric_infos": metric_infos,
+        "table_vector_scores": table_vector_scores_by_name,
+    }
 
 
 def convert_metric_info_from_qdrant_to_state(metric_info_qdrant: MetricInfoQdrant) -> MetricInfoState:
