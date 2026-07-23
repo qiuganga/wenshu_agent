@@ -112,6 +112,27 @@ agent:
   reject_on_cost_error: false
   expose_trace_to_client: false
   log_full_sql: false
+  candidate_ranking:
+    enabled: true
+    deterministic_top_k_tables: 12
+    deterministic_top_k_metrics: 12
+    max_selected_tables: 6
+    max_selected_metrics: 6
+    llm_rerank_enabled: true
+    llm_rerank_timeout_seconds: 3
+    max_relationship_depth: 4
+    weights:
+      lexical: 0.15
+      alias: 0.10
+      vector: 0.20
+      coverage: 0.25
+      value: 0.10
+      metric_support: 0.10
+      relationship: 0.10
+    penalties:
+      disconnected: 0.20
+      excessive_join: 0.05
+      unsupported_metric: 0.25
   banned_sql_functions:
     - benchmark
     - get_lock

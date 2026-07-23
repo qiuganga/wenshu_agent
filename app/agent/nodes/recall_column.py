@@ -1,6 +1,7 @@
 from langgraph.runtime import Runtime
 
 from app.agent.context import DataAgentContext
+from app.agent.ranking.models import ScoredCandidate
 from app.agent.state import DataAgentState
 from app.core.logging import logger
 from app.llm.gateway import llm_gateway as llm
@@ -21,12 +22,20 @@ async def recall_column(state: DataAgentState, runtime: Runtime[DataAgentContext
         expanded_keywords = []
 
     retrieved_map: dict[str, ColumnInfoQdrant] = {}
+    table_vector_scores: dict[str, float] = {}
     for keyword in list(dict.fromkeys(keywords + [str(value) for value in expanded_keywords])):
         embedding = await embedding_client.aembed_query(keyword)
-        payloads: list[ColumnInfoQdrant] = await repository.search(embedding)
-        for payload in payloads:
+        if hasattr(repository, "search_with_scores"):
+            scored_payloads: list[ScoredCandidate[ColumnInfoQdrant]] = await repository.search_with_scores(embedding)
+        else:
+            payloads: list[ColumnInfoQdrant] = await repository.search(embedding)
+            scored_payloads = [ScoredCandidate(payload, 0.0) for payload in payloads]
+        for candidate in scored_payloads:
+            payload = candidate.payload
             retrieved_map.setdefault(payload["id"], payload)
+            table_id = payload["table_id"]
+            table_vector_scores[table_id] = max(table_vector_scores.get(table_id, 0.0), candidate.score)
 
     retrieved = list(retrieved_map.values())
     logger.info(f"recall column count={len(retrieved)}")
-    return {"retrieved_columns": retrieved, "table_candidates": retrieved}
+    return {"retrieved_columns": retrieved, "table_candidates": retrieved, "table_vector_scores": table_vector_scores}

@@ -48,12 +48,17 @@ SAFE_ATTRIBUTE_KEYS = {
     "prompt_version",
     "query_hash",
     "request_id",
+    "rerank_fallback",
+    "rerank_used",
     "resource",
     "retry_count",
     "risk_level",
     "row_count",
     "scope_hash",
     "similarity_score",
+    "score_version",
+    "selected_count",
+    "selection_source",
     "sql_hash",
     "table_names",
     "threshold",
@@ -161,6 +166,11 @@ class TelemetryManager:
         self.agent_route_total = _NoopInstrument()
         self.handoff_total = _NoopInstrument()
         self.agent_failure_total = _NoopInstrument()
+        self.candidate_ranking_total = _NoopInstrument()
+        self.candidate_rerank_total = _NoopInstrument()
+        self.candidate_rerank_fallback_total = _NoopInstrument()
+        self.candidate_partial_coverage_total = _NoopInstrument()
+        self.candidate_disconnected_total = _NoopInstrument()
         self.budget_rejected_total = _NoopInstrument()
         self.quota_rejected_total = _NoopInstrument()
         self.load_shed_total = _NoopInstrument()
@@ -180,6 +190,11 @@ class TelemetryManager:
         self.semantic_search_latency_seconds = _NoopInstrument()
         self.cache_entry_age_seconds = _NoopInstrument()
         self.semantic_similarity_score = _NoopInstrument()
+        self.candidate_ranking_latency_seconds = _NoopInstrument()
+        self.candidate_count = _NoopInstrument()
+        self.selected_candidate_count = _NoopInstrument()
+        self.requirement_coverage_ratio = _NoopInstrument()
+        self.selected_relationship_distance = _NoopInstrument()
         self.request_cost = _NoopInstrument()
         self.request_input_tokens = _NoopInstrument()
         self.request_output_tokens = _NoopInstrument()
@@ -250,6 +265,11 @@ class TelemetryManager:
         self.agent_route_total = self._meter.create_counter("agent_route_total")
         self.handoff_total = self._meter.create_counter("handoff_total")
         self.agent_failure_total = self._meter.create_counter("agent_failure_total")
+        self.candidate_ranking_total = self._meter.create_counter("candidate_ranking_total")
+        self.candidate_rerank_total = self._meter.create_counter("candidate_rerank_total")
+        self.candidate_rerank_fallback_total = self._meter.create_counter("candidate_rerank_fallback_total")
+        self.candidate_partial_coverage_total = self._meter.create_counter("candidate_partial_coverage_total")
+        self.candidate_disconnected_total = self._meter.create_counter("candidate_disconnected_total")
         self.budget_rejected_total = self._meter.create_counter("budget_rejected_total")
         self.quota_rejected_total = self._meter.create_counter("quota_rejected_total")
         self.load_shed_total = self._meter.create_counter("load_shed_total")
@@ -269,6 +289,11 @@ class TelemetryManager:
         self.semantic_search_latency_seconds = self._meter.create_histogram("semantic_search_latency_seconds")
         self.cache_entry_age_seconds = self._meter.create_histogram("cache_entry_age_seconds")
         self.semantic_similarity_score = self._meter.create_histogram("semantic_similarity_score")
+        self.candidate_ranking_latency_seconds = self._meter.create_histogram("candidate_ranking_latency_seconds")
+        self.candidate_count = self._meter.create_histogram("candidate_count")
+        self.selected_candidate_count = self._meter.create_histogram("selected_candidate_count")
+        self.requirement_coverage_ratio = self._meter.create_histogram("requirement_coverage_ratio")
+        self.selected_relationship_distance = self._meter.create_histogram("selected_relationship_distance")
         self.request_cost = self._meter.create_histogram("request_cost")
         self.request_input_tokens = self._meter.create_histogram("request_input_tokens")
         self.request_output_tokens = self._meter.create_histogram("request_output_tokens")
