@@ -379,20 +379,6 @@ uv run python -m evals.run_evaluation --smoke
 
 离线评测用于 smoke regression，不代表模型在真实业务上的绝对准确率。
 
-## 面试亮点
-
-1. 真实生产图构建器：`app/agent/graph.py` 支持注入 fake nodes，测试和生产使用同一套边与条件路由。
-2. SQL 安全网关：`app/security/sql_security.py` 不信任 Prompt，使用 AST 和补充扫描做安全控制。
-3. Identifier 注入防护：`app/security/sql_identifiers.py` 保护动态表名和字段名。
-4. SQL 成本评估：`app/security/sql_cost.py` 和 `app/agent/nodes/evaluate_sql_cost.py` 在执行前解析 EXPLAIN JSON。
-5. 结构化 LLM 输出：`app/agent/nodes/_sql_output.py` 优先使用 structured output，并在失败时携带错误反馈重试。
-6. SSE 背压和 token 合并：`app/service/query_service.py`、`app/agent/nodes/interpret_result.py` 控制流式资源消耗。
-7. 结果脱敏：`app/security/data_masking.py` 避免敏感字段直接返回。
-8. 取消机制：客户端断开后取消 graph task，避免无意义后台消耗。
-9. 离线评测：`evals/run_evaluation.py` 支持 fake LLM smoke metrics。
-10. 质量脚本：`scripts/check_text_encoding.py`、`scripts/check_no_secrets.py`、`scripts/check_readme_commands.py` 把文档质量纳入 CI。
-11. CI 可运行：`.github/workflows/ci.yml` 不依赖真实外部服务。
-12. Demo bootstrap：`app/scripts/bootstrap_demo.py` 提供幂等演示入口。
 
 ## 已知限制
 
